@@ -19,7 +19,7 @@ Below are various screenshots the project's current state:
 
 Grid, elevation, and coastline rendered for a hexagon-cell grid
 
-![Image2](images/milestone1_2.PNG)
+![Image2](images/milestone1_2.png)
 
 Grid, elevation, and coastline rendered for a square-cell grid
 
