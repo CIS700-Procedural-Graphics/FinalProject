@@ -23,7 +23,11 @@ Using randomness and some adjustable threshold I can remove cubes giving the pat
 
 -> The cubes were created using the instanced BufferGeometry of three.js for speed and efficiency 
 
-### Weird Issues: The Instanced cubes that were created occassionally refuse to show up when viewing the scene from certain camera angles.
+#### Weird Issues:
 
-### Comments: I spent some time experimenting with various graphs and room placement techniques before settling down on the methods I am currently using. These methods proved to be faster and easier to implement than what I had initially mentioned in my design Doc.
+The Instanced cubes that were created occassionally refuse to show up when viewing the scene from certain camera angles.
+
+#### Comments: 
+
+I spent some time experimenting with various graphs and room placement techniques before settling down on the methods I am currently using. These methods proved to be faster and easier to implement than what I had initially mentioned in my design Doc.
 
