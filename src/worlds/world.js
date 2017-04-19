@@ -28,29 +28,54 @@ export default class World {
         return this.baseMesh.geometry.faces;
     }
 
-    spin(speed) {
+    // world animation options 
+    spin(tStart, tEnd, speed) {
         // Spin the world  
-        this.baseMesh.rotation.y = speed;
-        this.baseMesh.updateMatrix();
-        this.baseMesh.geometry.applyMatrix( this.baseMesh.matrix );
+        if (this.timer.elapsedTime >= tStart && this.timer.elapsedTime < tEnd) {
+            this.baseMesh.rotation.y = speed;
+            this.baseMesh.updateMatrix();
+            this.baseMesh.geometry.applyMatrix( this.baseMesh.matrix );
 
-        for (var i = 0; i < this.assets.length; i++) {
-            var asset = this.assets[i];
-            asset.setPosition(asset.vertex);
-            this.baseMesh.geometry.computeFaceNormals();
-            this.baseMesh.geometry.computeVertexNormals();
-            asset.alignItemsWithNormal(); 
-        }   
+            for (var i = 0; i < this.assets.length; i++) {
+                var asset = this.assets[i];
+                asset.setPosition(asset.vertex);
+                this.baseMesh.geometry.computeFaceNormals();
+                this.baseMesh.geometry.computeVertexNormals();
+                asset.alignItemsWithNormal(); 
+            }   
+        }
+    }
 
-    // easeSpin(speed) {
-    //     // slow world down
-    //     this.baseMesh.rotation.y -= speed; 
-    //     this.baseMesh.updateMatrix();
-    //     this.baseMesh.geometry.applyMatrix( this.baseMesh.matrix );
+    spinAccelerate(tStart, tEnd, speed) {
+        if (this.timer.elapsedTime >= tStart && this.timer.elapsedTime < tEnd) {
+            this.baseMesh.rotation.y += speed;
+            this.baseMesh.updateMatrix();
+            this.baseMesh.geometry.applyMatrix( this.baseMesh.matrix );
 
-    //     for (var i = 0; i < this.assets.length; i++) {
-    //         var asset = this.assets[i];
-    //         if (i == 0) console.log(asset.vertex);
+            for (var i = 0; i < this.assets.length; i++) {
+                var asset = this.assets[i];
+                asset.setPosition(asset.vertex);
+                this.baseMesh.geometry.computeFaceNormals();
+                this.baseMesh.geometry.computeVertexNormals();
+                asset.alignItemsWithNormal(); 
+            }   
+        }
+    }
+
+    spinDeccelerate(tStart, tEnd, speed) {
+        if (this.timer.elapsedTime >= tStart && this.timer.elapsedTime < tEnd) {
+            this.baseMesh.rotation.y -= speed;
+            this.baseMesh.updateMatrix();
+            this.baseMesh.geometry.applyMatrix( this.baseMesh.matrix );
+
+            for (var i = 0; i < this.assets.length; i++) {
+                var asset = this.assets[i];
+                asset.setPosition(asset.vertex);
+                this.baseMesh.geometry.computeFaceNormals();
+                this.baseMesh.geometry.computeVertexNormals();
+                asset.alignItemsWithNormal(); 
+            }   
+        }
     }
 
 
@@ -102,6 +127,20 @@ export default class World {
         for (var i = 0; i < this.assets.length; i++) {
             this.assets[i].updateShaderUniforms();
         }
+    }
+
+    resetTransform(mesh) {
+        mesh.updateMatrix();
+        mesh.geometry.applyMatrix( mesh.matrix );
+        mesh.position.set( 0, 0, 0 );
+        mesh.rotation.set( 0, 0, 0 );
+        mesh.scale.set( 1, 1, 1 );
+        mesh.updateMatrix();
+    }
+
+    setMeshPosition(mesh, x, y, z) {
+        mesh.position.set(x, y, z);
+        this.resetTransform(mesh);
     }
 
     // update assets
