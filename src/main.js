@@ -22,7 +22,7 @@ var generalParameters = {
 
 var map2D = {
   numberOfCells: 30,
-  connectivity: 0.3,
+  connectivity: 0.4,
   roomSizeMin: 2.0, //controls min of width and length of rooms
   roomSizeMax: 3.0, //controls max of width and length of rooms
   walkWayWidth: 4.0,
@@ -251,6 +251,10 @@ function initwalkwayGeo(scene)
 
 	walkwayGeo.scale ( generalParameters.voxelsize, generalParameters.voxelsize, generalParameters.voxelsize );
 
+	var boundingSphereCenter = new THREE.Vector3(0,0,0);
+	var boundingSphereRadius = 300;
+	walkwayGeo.boundingSphere = new THREE.Sphere(boundingSphereCenter, boundingSphereRadius);
+	
 	// material
 	var voxelMat = new THREE.RawShaderMaterial( {
 		vertexShader: require ('./shaders/instance-vert.glsl') ,
