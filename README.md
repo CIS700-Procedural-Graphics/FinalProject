@@ -1,5 +1,7 @@
 # InterestingLevelGenerator
 
+Author: Aman Sachan
+
 The design doc exists in a pdf.
 
 ## MileStone 2:
