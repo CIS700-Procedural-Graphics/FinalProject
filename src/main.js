@@ -24,7 +24,7 @@ var generalParameters = {
 }
 
 var map2D = {
-  numberOfCells: 30,
+  numberOfCells: 4,
   connectivity: 0.3,
   roomSizeMin: 2.0, //controls min of width and length of rooms
   roomSizeMax: 3.0, //controls max of width and length of rooms
@@ -86,7 +86,8 @@ var voxelMat = new THREE.RawShaderMaterial({
 	    },
 	  },
 	vertexShader: require ('./shaders/instance-vert.glsl') ,
-	fragmentShader: require ('./shaders/instance-frag.glsl')
+	fragmentShader: require ('./shaders/instance-frag.glsl'),
+	side: THREE.DoubleSide
 } );
 
 //------------------------------------------------------------------------------
@@ -392,6 +393,7 @@ function spawn2DCells(scene, cellList, floorHeight)
 			var cell = new Cell("undetermined", cent, w, l, slab);
 			cellList.push(cell);      
 			cellList[cellList.length-1].drawCell(scene);
+			// console.log("cell pos", centx, floorHeight, centz);
 		}
 
 	}
@@ -658,35 +660,60 @@ function populateGrid()
 	}
 }
 
+//------------------------------------------------------------------------------
+
 function pathShifting(c1, c2, currCell, toCell)
 {
 	var p1 = new THREE.Vector3(c1.x, c1.y, c1.z);
+	var w1 = currCell.cellWidth;
+	var l1 = currCell.cellLength;
 	var p2 = new THREE.Vector3(c2.x, c2.y, c2.z);
+	var w2 = toCell.cellWidth;
+	var l2 = toCell.cellLength;
 
-	// var diff = new THREE.Vector3(c2.x - c1.x, c2.y - c1.y, c2.z - c1.z);
-	// // diff.normalize();
-	// var moveFactor = currCell.radius*8;
-	// var p1 = new THREE.Vector3( c1.x + diff.x*moveFactor, diff.y*moveFactor, diff.z*moveFactor);
+	var offset = map2D.walkWayWidth*0.3;
 
-	// var diff = new THREE.Vector3(c1.x - c2.x, c1.y - c2.y, c1.z - c2.z);
-	// // diff.normalize();
-	// moveFactor = toCell.radius*0.8;
-	// var p2 = new THREE.Vector3(c2.x - diff.x*moveFactor, c2.x - diff.y*moveFactor, c2.x - diff.z*moveFactor);
-	var tolerance = 40;
-	if((c2.x + currCell.cellWidth < c1.x) || (c2.x - currCell.cellWidth > c1.x))
-	{
-		p1.x = p1.x + currCell.cellLength;
-		p2.x = p2.x - toCell.cellLength;
+	if(c2.x > c1.x) 
+	{ 
+		//ToCell is to the right of the currCell
+		p2.x = p2.x - w2 + offset;
+		p1.x = p1.x + w1 - offset;
+	}
+	else 
+	{ 
+		//ToCell is to the left of the currCell
+		p2.x = p2.x + w2 - offset;
+		p1.x = p1.x - w1 + offset;
 	}
 
-	if((c2.z + currCell.cellLength < c1.z) || (c2.z - currCell.cellLength > c1.z))
-	{
-		p1.z = p1.z + currCell.cellWidth;
-		p2.z = p2.z - toCell.cellWidth;
+	if(c2.z < c1.z) 
+	{ 
+		//ToCell is infront(if measured along z axis) of the currCell
+		p2.z = p2.z + l2 - offset;
+		p1.z = p1.z - l1 + offset;
+	}
+	else
+	{ 
+		//ToCell is behind(if measured along z axis) the currCell
+		p2.z = p2.z - l2 + offset;
+		p1.z = p1.z + l1 - offset;
 	}
 
-	c1 = p1;
-	c2 = p2;
+	c1.x = p1.x;
+	c1.z = p1.z;
+	c2.x = p2.x;
+	c2.z = p2.z;
+}
+
+function removeRandomPaths(verts)
+{
+	for(var i=0; i<verts.length; i=i+2)
+	{
+		if(RAND.random()>level3D.connectivity)
+		{
+			verts.splice(i,2);
+		} 
+	}
 }
 
 function createInterConnectingWalkWays(pathPoints, walkway)
@@ -781,7 +808,7 @@ function interLayerWalkwaysOld(walkway)
 					// debugger;
 					for(var a=0; a<grid[index].slabs.length; a++)
 					{
-						debugger;
+						// debugger;
 						connectableCells.push(grid[index].slabs[a]);
 					}
 				}
@@ -831,7 +858,7 @@ function interLayerWalkways(walkway)
 					}
 
 					var dist = currCell.center.distanceTo(toCell.center);
-					var radius = 75.0;
+					var radius = 800.0; //height between layers is 20 and so this has to be greater than 20^2 and then some
 					if(dist < radius)
 					{
 						//create a list of those cells
@@ -855,6 +882,7 @@ function interLayerWalkways(walkway)
 		}
 	}
 
+	removeRandomPaths(verts);
 	createInterConnectingWalkWays(verts, walkway);
 }
 
@@ -886,7 +914,9 @@ function create3DMap(scene)
 			    }
 			  },
 			vertexShader: require ('./shaders/instance-vert.glsl') ,
-			fragmentShader: require ('./shaders/instance-frag.glsl')
+			fragmentShader: require ('./shaders/instance-frag.glsl'),
+			side: THREE.DoubleSide,
+			transparent: false
 		} );
 
 		layer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
@@ -914,7 +944,8 @@ function create3DMap(scene)
 	    }
 	  },
 	vertexShader: require ('./shaders/instance-vert.glsl') ,
-	fragmentShader: require ('./shaders/instance-frag.glsl')
+	fragmentShader: require ('./shaders/instance-frag.glsl'),
+	side: THREE.DoubleSide
 	});
 
 	var walkwayLayer = new WalkwayLayer();
@@ -922,7 +953,7 @@ function create3DMap(scene)
 	populateGrid();
 	interLayerWalkways(walkwayLayer.walkway);
 	
-	console.log(walkwayLayer.walkway);
+	// console.log(walkwayLayer.walkway);
 
 	walkwayLayer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
 	setWalkWayVoxels(walkwayLayer.instancedWalkway, walkwayLayer.walkway);
