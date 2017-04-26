@@ -1,3 +1,4 @@
+"use strict";
 //midi i/o
 //Using web MIDI API directly.
 //Built-in to Chrome, maybe others.
@@ -36,7 +37,7 @@ export default class MidiIO {
         // when we get a succesful response, run this code
         //console.log('outputs: ', midiAccess.outputs);
         //g_outputDeviceList=[];
-        for (var output of midiAccess.outputs.values()){
+        for(var output of midiAccess.outputs.values()){
             //console.log('output: ',output);
             //Use global var for this. See comments at top of file.
             g_outputDeviceList.push(output);

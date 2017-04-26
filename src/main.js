@@ -1,10 +1,9 @@
-
+"use strict";
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about this much
 import Framework from './framework'
 
 //import our code
 //
-import PowerCurve from './powerCurve.js'
 import Sequencer from './sequencer.js'
 
 // called after the scene loads
@@ -12,7 +11,7 @@ function onLoad(framework) {
   var scene = framework.scene;
   var camera = framework.camera;
   var renderer = framework.renderer;
-  var gui = framework.gui;
+  //var gui = framework.gui;
   var stats = framework.stats;
   
   // set camera position
@@ -24,38 +23,30 @@ function onLoad(framework) {
 
   // edit params and listen to changes like this
   // more information here: https://workshop.chromeexperiments.com/examples/gui/#1--Basic-Usage
-  gui.add(camera, 'fov', 0, 180).onChange(function(newVal) {
-    camera.updateProjectionMatrix();
-  });
+  //gui.add(camera, 'fov', 0, 180).onChange(function(newVal) {
+  //  camera.updateProjectionMatrix();
+  //});
 
   //add an object
+  /*
   var geom = new THREE.CubeGeometry(2,3,4);
   var material = new THREE.MeshBasicMaterial( 0x5500aa );
   var mesh = new THREE.Mesh(geom, material);
   scene.add( mesh );
-
-  //Test PowerCurve
-  var pc = new PowerCurve( 1, 1 );
-  pc.dump(10);
-  gui.add(pc, 'a', 0.1, 10 ).name('P Curve a').onChange(function(newVal) {
-    pc.a = newVal;
-    pc.dump(20);
-  })
-  gui.add(pc, 'b', 0.1, 10 ).name('P Curve b').onChange(function(newVal) {
-    pc.b = newVal;
-    pc.dump(20);
-  })
-
+  */
+  
   ////////
   //
   // Create the main sequencer/controller
-  framework.sequencer = new Sequencer();
-
+  framework.sequencer = new Sequencer( scene, camera );
+  //Keyboard event handler for basic midi input.
+  //Handled within sequencer
   window.addEventListener('keydown', function(event){
       framework.sequencer.keyboardInput(event);
   } );
 
-
+  //Init prev frame time
+  framework.prevTime = Date.now();
 }
 
 //////
@@ -65,9 +56,12 @@ function onLoad(framework) {
 function onUpdate(framework) {
   //console.log(`the time is ${new Date()}`);
   var msec = Date.now();
-  var dTimeSec = (msec - framework.prevTime) / 1000.0;
-  if( typeof framework.crowd != 'undefined'){
+  if( typeof( framework.sequencer ) != 'undefined'){
+    //console.log(framework.sequencer);
+    var dTime = (msec - framework.prevTime);
     framework.prevTime = msec;
+    if( dTime > 8 )
+      framework.sequencer.nextFrame( msec );
   }
   //console.log(adamMaterial.uniforms.uTimeMsec.value);
 }

@@ -1,3 +1,4 @@
+"use strict";
 //Musical Expression
 
 //MX characteristics (preliminary)
@@ -22,7 +23,7 @@ export default class MusicalExpression{
         // null if none
         this.firstME = ME;
 
-        //Object holding various msec and musical time value for this event
+        //Object holding various msec and musical time value for the start of this event
         //From sequencer
         //See comments in Sequencer class
         this.times = musicalTimesObj;
@@ -30,6 +31,12 @@ export default class MusicalExpression{
         this.durBeats = 0; //Need this? Have flag 'isInstantaneous' instead?
         this.perfBeatEnd = 0; //Ending time of this in beats since sequencer start
         
+        //List of VXs driven by this expression.
+        //Will probably want separate MX instances for each mapping
+        // between the same MX type and a VX. But we may have some MX types
+        // that generated multple VX's, so we have an array here.
+        this.VXlist = [];
+
         //Flag saying this MX is new and hasn't yet
         // been processd by translator
         //Need this?
@@ -45,13 +52,16 @@ export default class MusicalExpression{
         this.gravity = 'none';
     }
 
-    updateForFrame(perfBeatQ){
-        todo
-        //Update anything particular to this MX
-
-        //Call the assigned translate object's update method
+    //TODO - this should be a virtual function
+    // overriden by subclassing based on MX type
+    updateForFrame( musicalTiming ){
+        //First - pdate anything particular to this MX
+        if( this.type == 'gravity' ){
+            //probably nothing to do for gravity, it's instantaneous
+        }
+        //Second - call the assigned translate object's update method
         // to make any changes to assigned VX.
-        this.translation.updateForFrame( perfBeatQ );
+        this.translation.updateForFrame( this, musicalTiming );
 
         //All done if instantaneous MX
         this.isDone = ( this.durBeats == 0 );

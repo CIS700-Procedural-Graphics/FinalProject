@@ -1,3 +1,4 @@
+"use strict";
 //Musical Event
 //Abstraction of music event (just notes for now) to use
 // regardless of source of musical input

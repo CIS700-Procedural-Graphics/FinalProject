@@ -12,7 +12,8 @@ The responses to impulse will be modeled for simplicity using tweening technique
 
 2) The visuals will consist of animating the agent's motion along the path, with procedural elements based on the dynamics of the path (i.e. 1st, 2nd, 3rd derivatives) and in response to the notes themselves. For example I'll work on particles shooting off from the agent as angular acceleration increases, and will investigate an articulating form for the agent that swings with the dynamics of moving along the curve, and color effects based on musical tension/release.
 
-== Milestone 1 ==
+
+===== Milestone 1 =====
 
 If you run the code, you'll need a midi virtual synth running on the system's default virtual midi bus (IAC Bus on Mac). Then if you put the input focus on the render window in your browser, hit 'f' and 'j' to rock out! You'll see basic object info dumped for each note you hit, showing the steps from musical input to 'VisualExpression' creation.
 
@@ -51,3 +52,28 @@ I'm developing a framework for my visualization tool that goes beyond the scope 
 In coming years, I imagine I'll be rebuilding all this in Houdini!
 
 
+===== Milestone 2 =====
+
+Accomplishments:
+
+- Sequencer: Added start/stop controls and MIDI beat-click output. Manage per-frame flow of the music analysis and expression translation.
+
+- VisualExpressions: Implemented main 'path' type that maintains a set of path vertices and includes a buffer geometry for rendering the path. The path is perterbed by input from the simple 'gravity' type Musical Expression.
+
+It doesn't look at all interesting, but the framework is working (though I'll need to refactor it after the semester is done to continue working with it).
+
+===== Goals for final presentation =====
+
+- Add an 'agent', some object that follows the path and is the main visual focus point of the animation. This will be relatively easy.
+
+- Add a simple starfield to help the perception of motion. This will be easy to do with simple spheres.
+
+- Add a 'tail' to the agent that's physically based on a spring/gravity dynamics model. I've found one online that works in 2D that I'll likely modify for 3D. The tail will respond 'automatically' to the dyanmics of the agent's motion along the path.
+
+- Add a spark particle effect that can be started based on assignable music parameters or dynamics analysis. For example, as the agent turns sharply along the curve, generate some sparks. I'll probably use simple sprite-based non-shader techniques for glowing particles for simplicity to get it done in time.
+
+If time permits:
+
+- Enhance the starfield with sprite-based techniques to make the starts glow.
+
+- Create a shader to make a line glow or look like a smoke trail. This would be used to trace the path of the agent.

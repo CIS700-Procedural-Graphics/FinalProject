@@ -1,3 +1,4 @@
+"use strict";
 //Music Analysis!
 
 import MusicalEvent from "./musicalEvent.js"
@@ -36,8 +37,8 @@ export default class MusicAnalysis{
             
     }
 
-    addNewMX( MX ){
-        this.translator.addNewMX( MX );
+    processNewMXinstance( MX ){
+        this.translator.processNewMXinstance( MX );
     }
 
     //Check if the note matches the 'gravity' quality
@@ -66,7 +67,7 @@ export default class MusicAnalysis{
             //set the quality
             MX.gravity  = gravity;
 
-            this.addNewMX( MX );
+            this.processNewMXinstance( MX );
         }
     }
 
