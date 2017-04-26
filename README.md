@@ -1,6 +1,6 @@
 # InterestingLevelGenerator
 
-Author: Aman Sachan
+Author: Aman Sacha
 
 The design doc exists in a pdf.
 
