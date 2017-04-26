@@ -796,9 +796,6 @@ function interLayerWalkwaysOld(walkway)
 		}
 	}
 
-	console.log(verts.length);
-	debugger;
-
 	var height = (currCell.center.y + toCell.center.y)*0.5;
 	createInterConnectingWalkWays(verts, walkway);
 }
