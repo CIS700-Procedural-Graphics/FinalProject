@@ -6,6 +6,8 @@ import DAT from 'dat-gui'
 var OBJLoader = require('three-obj-loader');
 import Cell from './cell'
 import VoronoiPoint from './voronoiPoint'
+import Layer from './layer'
+import GridCell from './gridcell'
 OBJLoader(THREE);
 
 //------------------------------------------------------------------------------
@@ -22,7 +24,7 @@ var generalParameters = {
 
 var map2D = {
   numberOfCells: 30,
-  connectivity: 0.4,
+  connectivity: 0.3,
   roomSizeMin: 2.0, //controls min of width and length of rooms
   roomSizeMax: 3.0, //controls max of width and length of rooms
   walkWayWidth: 4.0,
@@ -30,7 +32,7 @@ var map2D = {
 }
 
 var level3D = {
-  numberOfLayers: 5,
+  numberOfLayers: 2,
   connectivity: 0.3
 }
 
@@ -55,16 +57,42 @@ var floor_Material = new THREE.ShaderMaterial({
   vertexShader: require('./shaders/lambert-withTexture-vert.glsl'),
   fragmentShader: require('./shaders/lambert-withTexture-frag.glsl')
 });
+// floor_Material = new THREE.MeshPhongMaterial({color: 0xdd3311});
 
-var walkwayGeo = new THREE.InstancedBufferGeometry();
-var walkwayMesh = new THREE.Mesh();
+
+// material for instanced objects
+var voxelMat = new THREE.RawShaderMaterial({
+	  uniforms:
+	  {
+	  	image1: { // Check the Three.JS documentation for the different allowed types and values
+	      type: "t",
+	      value: THREE.ImageUtils.loadTexture('./images/ground1.jpg')
+	    },
+	    ambientLight:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
+	    },
+	    lightVec:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 10, 10, 10 )
+	    },
+	    color:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 1.0, 0.3, 0.3 )
+	    },
+	  },
+	vertexShader: require ('./shaders/instance-vert.glsl') ,
+	fragmentShader: require ('./shaders/instance-frag.glsl')
+} );
 
 //------------------------------------------------------------------------------
-var LevelLayers = [];//list of 2D Layers
 
-var walkway = [];//holds a list of voxels -- so positions
-var cellList = [];//holds a list of cells -- so rooms/slabs
-var voronoi = [];//helps create voronoi pattern graph
+var levelLayers = [];//list of 2D Layers
+var grid = [];
+var gridsize = 20;
 
 //------------------------------------------------------------------------------
 
@@ -100,6 +128,14 @@ function changeGUI(gui, camera, scene)
 
 function setupLightsandSkybox(scene, camera, renderer)
 {
+	//add it to your own shader
+
+	// var hex = 0x000000;
+	// var near = 1;
+	// var far = 1000;
+	// scene.fog = new THREE.Fog(0xffffff, 1, 60);
+  	// scene.fog.color.setHSL( 0.55, 0.4, 0.8 );
+
 	// Set light
 	var directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
 	directionalLight.color.setHSL(0.1, 1, 0.95);
@@ -116,10 +152,10 @@ function setupLightsandSkybox(scene, camera, renderer)
 	  urlPrefix + 'py.jpg', urlPrefix + 'ny.jpg',
 	  urlPrefix + 'pz.jpg', urlPrefix + 'nz.jpg'
 	] );
-	//scene.background = skymap;
+	// scene.background = skymap;
 
 	renderer.setClearColor( 0xbfd1e5 );
-	scene.add(new THREE.AxisHelper(20));
+	// scene.add(new THREE.AxisHelper(20));
 
 	// set camera position
 	camera.position.set(50, 100, 50);
@@ -129,9 +165,7 @@ function setupLightsandSkybox(scene, camera, renderer)
 function onreset( scene )
 {
 	cleanscene(scene);
-	spawn2DCells(scene);
-	scene.add(lineSeg);
-	createGraph(scene);
+	create3DMap(scene);
 }
 
 function cleanscene(scene)
@@ -142,12 +176,19 @@ function cleanscene(scene)
 		var obj = scene.children[i];
 		scene.remove(obj);
 	}
+
+	//remove instanced objects separately, cause threejs's scene doesn't contain it as a child
+	for( var i=0; i<levelLayers.length; i++)
+	{
+		scene.remove(levelLayers[i].instancedWalkway);
+	}	
 }
 
 //------------------------------------------------------------------------------
 
-function initwalkwayGeo(scene)
+function initwalkwayGeo(scene, walkwayGeo, walkwayMat)
 {
+	//define and set attributes of the instanced walkway
 	// geometry
 	var instances = 65000;
 	// per mesh data
@@ -249,43 +290,35 @@ function initwalkwayGeo(scene)
 	}
 	walkwayGeo.addAttribute( 'offset', offsets ); // per mesh translation
 
+	//scale cubes that form walkway
 	walkwayGeo.scale ( generalParameters.voxelsize, generalParameters.voxelsize, generalParameters.voxelsize );
 
+	//creating bounding sphere
 	var boundingSphereCenter = new THREE.Vector3(0,0,0);
 	var boundingSphereRadius = 300;
 	walkwayGeo.boundingSphere = new THREE.Sphere(boundingSphereCenter, boundingSphereRadius);
-	
-	// material
-	var voxelMat = new THREE.RawShaderMaterial( {
-		vertexShader: require ('./shaders/instance-vert.glsl') ,
-		fragmentShader: require ('./shaders/instance-frag.glsl') ,
-		side: THREE.DoubleSide,
-		transparent: false
-	} );
 
-	walkwayMesh = new THREE.Mesh( walkwayGeo, voxelMat );
-	scene.add( walkwayMesh );
+	//create mesh
+	return new THREE.Mesh( walkwayGeo, walkwayMat );
 }
 
-function setWalkWayVoxels()
+function setWalkWayVoxels(walkwayMesh, walkway)
 {
 	var offsets = walkwayMesh.geometry.getAttribute("offset");
 	walkwayMesh.geometry.maxInstancedCount = walkway.length;
-	var vector = new THREE.Vector4();
 
 	for ( var i = 0; i < walkway.length; i++ ) 
 	{
 		var x = walkway[i].x;
 		var y = walkway[i].y;
 		var z = walkway[i].z;
-		vector.set( x, y, z, 0 );
-		offsets.setXYZ( i, vector.x, vector.y, vector.z );
+		offsets.setXYZ(i, x, y, z);
 	}
 }
 
 //------------------------------------------------------------------------------
 
-function cellCreateHelper(centx, centz, w, l, flag, spacing)
+function cellCreateHelper(cellList, centx, centz, w, l, flag, spacing)
 {
     var size = cellList.length;
     if(size != 0)
@@ -295,9 +328,10 @@ function cellCreateHelper(centx, centz, w, l, flag, spacing)
 
         for(var j=0; j<size; j++)
         {
-            var cent = new THREE.Vector3(centx, 0.0, centz);
+            var cent = new THREE.Vector2(centx, centz);
+            var cent2 = new THREE.Vector2(cellList[j].center.x, cellList[j].center.z);
             var r = cellList[j].radius;
-            var currdist = cent.distanceTo(cellList[j].center);
+            var currdist = cent.distanceTo(cent2);
 
             if( currdist > (currRadius + r + spacing) )
             {
@@ -318,10 +352,8 @@ function cellCreateHelper(centx, centz, w, l, flag, spacing)
     return true;
 }
 
-function spawn2DCells(scene)
+function spawn2DCells(scene, cellList, floorHeight)
 {
-	
-	cellList = [];
 	var count = 0;
 	var count1 = 0;
 	var roomscale = 2.8;
@@ -344,16 +376,15 @@ function spawn2DCells(scene)
 		var l = (map2D.roomSizeMin + RAND.random()*(map2D.roomSizeMax-map2D.roomSizeMin))*roomscale ;
 
 		//loop through other cells to see if there is an overlap --> sample and rejection technique
-		flag_create = cellCreateHelper(centx, centz, w, l, flag_create, spacing);
+		flag_create = cellCreateHelper(cellList, centx, centz, w, l, flag_create, spacing);
 
 		if( flag_create )
 		{
 			count++;
-			var box_geo = new THREE.BoxGeometry( w*2.0, 1, l*2.0 );	
-			// var box_geo = new THREE.BoxGeometry( w*2.0, 0.00001, l*2.0 );			
+			var box_geo = new THREE.BoxGeometry( w*2.0, 1, l*2.0 );		
 			var slab = new THREE.Mesh( box_geo, floor_Material );
 
-			var cent = new THREE.Vector3( centx, 0.0, centz );
+			var cent = new THREE.Vector3( centx, floorHeight, centz );
 
 			var cell = new Cell("undetermined", cent, w, l, slab);
 			cellList.push(cell);      
@@ -361,8 +392,8 @@ function spawn2DCells(scene)
 		}
 
 	}
-	console.log("number of cells: " + map2D.numberOfCells);
-	console.log("number of cells drawn: " + cellList.length);
+	// console.log("number of cells: " + map2D.numberOfCells);
+	// console.log("number of cells drawn: " + cellList.length);
 }
 
 //------------------------------------------------------------------------------
@@ -405,18 +436,18 @@ function removeIntersectingLines(linePoints)
 			z: Z
 		}
 
-		if (betweenPoints(pt, p1, p2) && betweenPoints(pt, q1, q2)) {
-
+		if (betweenPoints(pt, p1, p2) && betweenPoints(pt, q1, q2)) 
+		{
 	  		//lines intersect
           	//delete one of them
           	linePoints.splice(j,2);
-          	j-=2;
+          	j -= 2;
 	  	}
     }
   }
 }
 
-function removeRandomLines()
+function removeRandomLines(voronoi)
 {
 	for(var i=0; i<voronoi.length; i++)
 	{
@@ -431,7 +462,7 @@ function removeRandomLines()
 	}
 }
 
-function createWalkWays(pathPoints)
+function createWalkWays(pathPoints, walkway, height)
 {
 	//draw planes instead of line segments that represent walk ways
 	for(var i=0; i<pathPoints.length; i=i+2)
@@ -455,7 +486,7 @@ function createWalkWays(pathPoints)
 	  	//create voxelized walkways; will look cooler than solid planes
 	  	for(var j=0; j<numcurvepoints; j++)
   		{
-  			var curvepos = new THREE.Vector3(curvegeo.vertices[j].x, 0.0, curvegeo.vertices[j].y);
+  			var curvepos = new THREE.Vector3(curvegeo.vertices[j].x, height, curvegeo.vertices[j].y);
 			var up = new THREE.Vector3( 0.0, 1.0, 0.0 );
   			var forward = new THREE.Vector3(curvegeo.vertices[j+1].x - curvegeo.vertices[j].x, 
 							  				0.0, 
@@ -502,14 +533,13 @@ function compareCells(cellA, cellB)
 	}
 }
 
-function createGraph(scene)
+function createGraph(scene, cellList, voronoi, walkway, height)
 {
 	//sort cellList by the centers of the cells, sort centers by x (if equal use z)
 	cellList.sort(compareCells);
 
 	//Fake Cheap Traingular Voronoi
 	//create a triangle from the first three points in the cellList. This is the beginning of the fake voronoi
-
 	var v1 = new VoronoiPoint( cellList[0].center, cellList[1].center, cellList[2].center );
 	var v2 = new VoronoiPoint( cellList[1].center, cellList[2].center, cellList[0].center );
 	var v3 = new VoronoiPoint( cellList[2].center, cellList[0].center, cellList[1].center );
@@ -558,7 +588,7 @@ function createGraph(scene)
 	//(a list of points that together with the vertex of the voronoi element form an edge)
 
 	//draw the edges to visualize it
-	removeRandomLines(); //so not everything is connected
+	removeRandomLines(voronoi); //so not everything is connected
 
 	var verts = [];
 	for(var i=0; i<voronoi.length; i++)
@@ -571,16 +601,146 @@ function createGraph(scene)
 	}
 
 	removeIntersectingLines(verts);
-	createWalkWays(verts);
+	createWalkWays(verts, walkway, height);
 
-	console.log("number of walkways: " + verts.length*0.5);
+	// console.log("number of walkways: " + verts.length*0.5);
 }
 
 //------------------------------------------------------------------------------
 
-function create3DMap()
+function initgrid()
 {
+	var index = 0;
+	//fill grid with empty elements
+	for(var i=0; i<gridsize; i++)
+	{
+		for(var j=0; j<gridsize; j++)
+		{
+			for(var k=0; k<gridsize; k++)
+			{
+				// index = i*gridsize*gridsize + j*gridsize + k;
+				var gridcell = new GridCell();
+				grid.push(gridcell);
+			}	
+		}
+	}	
+}
 
+function populateGrid()
+{
+	//each grid cell contains a list of slabs that are in it
+	var index = 0;
+
+	//gridsize is 20
+	//grid is a gridsize by gridsize by gridsize thing
+
+	for(var i=0; i<levelLayers.length; i++)
+	{		
+		//for each layer
+		for(var j=0; j<levelLayers[i].cellList.length; j++)
+		{		
+			//for each cell list
+			//find it position and put it in a grid cell
+			var cell = levelLayers[i].cellList[j];
+			var pos = cell.center;
+			var r = cell.radius;
+
+			var indy = Math.floor(pos.y/gridsize);
+			var indx = Math.floor(pos.x/gridsize);
+			var indz = Math.floor(pos.z/gridsize);
+
+			index = indy*gridsize*gridsize + indx*gridsize + indz;
+			var gridcell = grid[index];
+			gridcell.slabs.push(cell); 
+		}
+	}
+}
+
+function interLayerWalkways()
+{
+	//for every n randomly chosen slabs connect them to some other slab in the layer above it
+	for(var i=0; i<level3D.numberOfLayers-1; i++)
+	{
+		//for every layer
+		//pick an x number of slabs
+		var n = RAND.random()*5;
+
+		for(var j=0; j<n; j++)
+		{
+			var ind = Math.floor(RAND.random()*levelLayers[i].length);
+			var cell = levelLayers[i].cellList[ind];
+
+			//search through the grid in nearby cells in some radius
+			//create a list of those cells
+			//pick a random cell from that list and connect the original cell to the chosen cell 
+
+		}
+	}
+}
+
+function create3DMap(scene)
+{
+	levelLayers.length = 0;
+	var floorOffset = 20;
+	var h = 0;
+	for(var i=0; i<level3D.numberOfLayers; i++)
+	{		
+		//new layer
+		var layer = new Layer();
+
+		//new set of platforms for layers
+		spawn2DCells(scene, layer.cellList, h);
+		//new set of walkways for layers	
+		createGraph(scene, layer.cellList, layer.voronoi, layer.walkway, h);
+
+		//new instanced geometry for all of the walkways
+		var geo = new THREE.InstancedBufferGeometry();
+
+		var mat = new THREE.RawShaderMaterial({
+			  uniforms:
+			  {
+			    color:
+			    {
+			        type: "v3",
+			        value: new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() )
+			    }
+			  },
+			vertexShader: require ('./shaders/instance-vert.glsl') ,
+			fragmentShader: require ('./shaders/instance-frag.glsl')
+		} );
+
+		layer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
+		setWalkWayVoxels(layer.instancedWalkway, layer.walkway);
+
+		//add walkway to scene
+		scene.add(layer.instancedWalkway);
+
+		//push layer to list of layers
+		levelLayers.push(layer);
+		h = h + floorOffset; 
+	}
+
+	//now connect layers
+	//new geometry and material for between layer connections
+	var geo = new THREE.InstancedBufferGeometry();
+
+	var mat = new THREE.RawShaderMaterial({
+	  uniforms:
+	  {
+	    color:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() )
+	    }
+	  },
+	vertexShader: require ('./shaders/instance-vert.glsl') ,
+	fragmentShader: require ('./shaders/instance-frag.glsl')
+	});
+
+	layer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
+
+	populateGrid();
+	interLayerWalkways();
 }
 
 //------------------------------------------------------------------------------
@@ -597,16 +757,14 @@ function onLoad(framework)
 	setupLightsandSkybox(scene, camera, renderer);
 	changeGUI(gui, camera, scene);
 
-	spawn2DCells(scene);
-	createGraph(scene);
-
-	initwalkwayGeo(scene);
-	setWalkWayVoxels();
+	initgrid();
+	create3DMap(scene);
 }
 
 // called on frame updates
 function onUpdate(framework)
 {
+
 
 }
 

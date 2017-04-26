@@ -1,7 +1,5 @@
 # InterestingLevelGenerator
 
-Design Doc is a pdf file
-
 ## MileStone1:
 
 2D procedural level generation: done
@@ -23,12 +21,9 @@ my portion of the work: All files in the project are my work(no teammates)
 -> along the line segments joining the slabs I voxelized the space and generated a bunch of cubes to represent the path;
 Using randomness and some adjustable threshold I can remove cubes giving the path a worn away feel;
 
--> The cubes were created using the instanced BufferGeometry of three.js for speed and efficiency
+-> The cubes were created using the instanced BufferGeometry of three.js for speed and efficiency 
 
-#### Weird Issues:
+### Weird Issues: The Instanced cubes that were created occassionally refuse to show up when viewing the scene from certain camera angles.
 
-The Instanced cubes that were created occassionally refuse to show up when viewing the scene from certain camera angles.
+### Comments: I spent some time experimenting with various graphs and room placement techniques before settling down on the methods I am currently using. These methods proved to be faster and easier to implement than what I had initially mentioned in my design Doc.
 
-#### Comments:
-
-I spent some time experimenting with various graphs and room placement techniques before settling down on the methods I am currently using. These methods proved to be faster and easier to implement than what I had initially mentioned in my design Doc.
