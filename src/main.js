@@ -7,6 +7,7 @@ var OBJLoader = require('three-obj-loader');
 import Cell from './cell'
 import VoronoiPoint from './voronoiPoint'
 import Layer from './layer'
+import WalkwayLayer from './walkwaylayer'
 import GridCell from './gridcell'
 OBJLoader(THREE);
 
@@ -92,6 +93,8 @@ var voxelMat = new THREE.RawShaderMaterial({
 
 var levelLayers = [];//list of 2D Layers
 var grid = [];
+var connectingWalkways = []; //list of walkwaylayers connecting
+//grid indexing scheme: index = currIndy*gridsize*gridsize + currIndx*gridsize + currIndz;
 var gridsize = 20;
 
 //------------------------------------------------------------------------------
@@ -618,7 +621,6 @@ function initgrid()
 		{
 			for(var k=0; k<gridsize; k++)
 			{
-				// index = i*gridsize*gridsize + j*gridsize + k;
 				var gridcell = new GridCell();
 				grid.push(gridcell);
 			}	
@@ -656,8 +658,58 @@ function populateGrid()
 	}
 }
 
-function interLayerWalkways()
+
+function createInterConnectingWalkWays(verts, walkway)
 {
+//draw planes instead of line segments that represent walk ways
+	for(var i=0; i<pathPoints.length; i=i+2)
+  	{
+	  	var p1 = pathPoints[i];
+	  	var p2 = pathPoints[i+1];
+
+	  	var w = map2D.walkWayWidth;
+
+	  	var curve = new THREE.SplineCurve( [
+			new THREE.Vector2( p1.x, p1.z ),
+			new THREE.Vector2( p2.x, p2.z )
+		] );
+
+	  	var len = p1.distanceTo(p2);
+	  	var stepsize = generalParameters.voxelsize;
+	  	var numcurvepoints = (len/stepsize);
+		var path = new THREE.Path( curve.getPoints( numcurvepoints+1 ) );
+		var curvegeo = path.createPointsGeometry( numcurvepoints+1 );
+		
+	  	//create voxelized walkways; will look cooler than solid planes
+	  	for(var j=0; j<numcurvepoints; j++)
+  		{
+  			var curvepos = new THREE.Vector3(curvegeo.vertices[j].x, 0.0, curvegeo.vertices[j].y);
+			var up = new THREE.Vector3( 0.0, 1.0, 0.0 );
+  			var forward = new THREE.Vector3(curvegeo.vertices[j+1].x - curvegeo.vertices[j].x, 
+							  				0.0, 
+							  				curvegeo.vertices[j+1].y - curvegeo.vertices[j].y).normalize();
+  			var left = new THREE.Vector3(up.x, up.y, up.z).normalize();
+  			left.cross(forward).normalize();
+
+  			for(var k=-w*0.5; k<=w*0.5; k++)
+  			{
+  				if( map2D.crumbleStatus > RAND.random() )
+  				{
+  				  	var perpPos = new THREE.Vector3(curvepos.x, curvepos.y, curvepos.z);
+					var temp = new THREE.Vector3(left.x, left.y, left.z);
+					perpPos.x += temp.x*k;
+					perpPos.z += temp.z*k;
+					walkway.push(perpPos);
+  				}
+  			}
+  		}
+  	}
+}
+
+function interLayerWalkways(walkway)
+{
+	var index = 0;
+	var verts = [];
 	//for every n randomly chosen slabs connect them to some other slab in the layer above it
 	for(var i=0; i<level3D.numberOfLayers-1; i++)
 	{
@@ -667,15 +719,45 @@ function interLayerWalkways()
 
 		for(var j=0; j<n; j++)
 		{
-			var ind = Math.floor(RAND.random()*levelLayers[i].length);
-			var cell = levelLayers[i].cellList[ind];
+			var ind1 = Math.floor(RAND.random()*levelLayers[i].cellList.length);
+			var currCell = levelLayers[i].cellList[ind1];
 
+			//find current cell's position in grid
+			var currIndy = Math.floor(currCell.center.y/gridsize);
+			var currIndx = Math.floor(currCell.center.x/gridsize);
+			var currIndz = Math.floor(currCell.center.z/gridsize);
+
+			var connectableCells = [];
 			//search through the grid in nearby cells in some radius
-			//create a list of those cells
+			//cells to the right and towards the camera; -- add thing for other way too
+			for(var k=currIndx+2; k<Math.min((currIndx+6), gridsize); k++)
+			{
+				for(var m=currIndz+2; m<Math.min((currIndz+6), gridsize); m++)
+				{
+					//create a list of those cells
+					index = currIndy*gridsize*gridsize + currIndx*gridsize + currIndz;
+					// debugger;
+					for(var a=0; a<grid[index].slabs.length; a++)
+					{
+						connectableCells.push(grid[index].slabs[a]);
+					}
+				}
+			}
+			
 			//pick a random cell from that list and connect the original cell to the chosen cell 
+			var ind2 = Math.floor(RAND.random()*connectableCells.length);
+			var toCell = connectableCells[ind2];
 
+			verts.push(currCell.center);
+			verts.push(toCell.center);
 		}
 	}
+
+	console.log(verts.length);
+	debugger;
+
+	var height = (currCell.center.y + toCell.center.y)*0.5;
+	createInterConnectingWalkWays(verts, walkway);
 }
 
 function create3DMap(scene)
@@ -737,10 +819,18 @@ function create3DMap(scene)
 	fragmentShader: require ('./shaders/instance-frag.glsl')
 	});
 
-	layer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
+	var walkwayLayer = new WalkwayLayer();
 
 	populateGrid();
-	interLayerWalkways();
+	interLayerWalkways(walkwayLayer.walkway);
+	
+	console.log(walkwayLayer.walkway);
+
+	walkwayLayer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
+	setWalkWayVoxels(walkwayLayer.instancedWalkway, walkwayLayer.walkway);
+
+	//add walkway to scene
+	scene.add(walkwayLayer.instancedWalkway);
 }
 
 //------------------------------------------------------------------------------
