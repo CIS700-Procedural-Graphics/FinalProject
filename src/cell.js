@@ -7,8 +7,8 @@ export default class Cell //class for rooms or corridors
 		this.name = _name;
 		this.center = _center.clone();
 		this.mesh = _mesh.clone();
-		this.cellWidth = _width;
-		this.cellLength = _length;
+		this.cellWidth = _width; //a x axis term
+		this.cellLength = _length; //a z axis term
 		this.radius = Math.sqrt( this.cellLength*this.cellLength + this.cellWidth*this.cellWidth ) * 0.5;
 	}
 

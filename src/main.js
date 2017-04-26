@@ -158,7 +158,7 @@ function setupLightsandSkybox(scene, camera, renderer)
 	// scene.background = skymap;
 
 	renderer.setClearColor( 0xbfd1e5 );
-	// scene.add(new THREE.AxisHelper(20));
+	scene.add(new THREE.AxisHelper(20));
 
 	// set camera position
 	camera.position.set(50, 100, 50);
@@ -658,10 +658,40 @@ function populateGrid()
 	}
 }
 
-
-function createInterConnectingWalkWays(verts, walkway)
+function pathShifting(c1, c2, currCell, toCell)
 {
-//draw planes instead of line segments that represent walk ways
+	var p1 = new THREE.Vector3(c1.x, c1.y, c1.z);
+	var p2 = new THREE.Vector3(c2.x, c2.y, c2.z);
+
+	// var diff = new THREE.Vector3(c2.x - c1.x, c2.y - c1.y, c2.z - c1.z);
+	// // diff.normalize();
+	// var moveFactor = currCell.radius*8;
+	// var p1 = new THREE.Vector3( c1.x + diff.x*moveFactor, diff.y*moveFactor, diff.z*moveFactor);
+
+	// var diff = new THREE.Vector3(c1.x - c2.x, c1.y - c2.y, c1.z - c2.z);
+	// // diff.normalize();
+	// moveFactor = toCell.radius*0.8;
+	// var p2 = new THREE.Vector3(c2.x - diff.x*moveFactor, c2.x - diff.y*moveFactor, c2.x - diff.z*moveFactor);
+	var tolerance = 40;
+	if((c2.x + currCell.cellWidth < c1.x) || (c2.x - currCell.cellWidth > c1.x))
+	{
+		p1.x = p1.x + currCell.cellLength;
+		p2.x = p2.x - toCell.cellLength;
+	}
+
+	if((c2.z + currCell.cellLength < c1.z) || (c2.z - currCell.cellLength > c1.z))
+	{
+		p1.z = p1.z + currCell.cellWidth;
+		p2.z = p2.z - toCell.cellWidth;
+	}
+
+	c1 = p1;
+	c2 = p2;
+}
+
+function createInterConnectingWalkWays(pathPoints, walkway)
+{
+	//draw planes instead of line segments that represent walk ways
 	for(var i=0; i<pathPoints.length; i=i+2)
   	{
 	  	var p1 = pathPoints[i];
@@ -669,25 +699,36 @@ function createInterConnectingWalkWays(verts, walkway)
 
 	  	var w = map2D.walkWayWidth;
 
-	  	var curve = new THREE.SplineCurve( [
-			new THREE.Vector2( p1.x, p1.z ),
-			new THREE.Vector2( p2.x, p2.z )
-		] );
-
 	  	var len = p1.distanceTo(p2);
 	  	var stepsize = generalParameters.voxelsize;
 	  	var numcurvepoints = (len/stepsize);
-		var path = new THREE.Path( curve.getPoints( numcurvepoints+1 ) );
-		var curvegeo = path.createPointsGeometry( numcurvepoints+1 );
-		
+
+	  	//Three js is a stupid graphics library --> does not have a get points method for 3d points
+	  	//hence the stupidity and hackiness below
+	  	var curve1 = new THREE.SplineCurve( [
+			new THREE.Vector2( p1.x, p1.y ),
+			new THREE.Vector2( p2.x, p2.y )
+		] );
+
+		var curve2 = new THREE.SplineCurve( [
+			new THREE.Vector2( p1.y, p1.z ),
+			new THREE.Vector2( p2.y, p2.z )
+		] );
+
+		var path1 = new THREE.Path( curve1.getPoints( numcurvepoints+1 ) );
+		var curvegeo1 = path1.createPointsGeometry( numcurvepoints+1 );
+
+		var path2 = new THREE.Path( curve2.getPoints( numcurvepoints+1 ) );
+		var curvegeo2 = path2.createPointsGeometry( numcurvepoints+1 );
+
 	  	//create voxelized walkways; will look cooler than solid planes
 	  	for(var j=0; j<numcurvepoints; j++)
   		{
-  			var curvepos = new THREE.Vector3(curvegeo.vertices[j].x, 0.0, curvegeo.vertices[j].y);
+  			var curvepos = new THREE.Vector3(curvegeo1.vertices[j].x, curvegeo1.vertices[j].y, curvegeo2.vertices[j].y);
 			var up = new THREE.Vector3( 0.0, 1.0, 0.0 );
-  			var forward = new THREE.Vector3(curvegeo.vertices[j+1].x - curvegeo.vertices[j].x, 
-							  				0.0, 
-							  				curvegeo.vertices[j+1].y - curvegeo.vertices[j].y).normalize();
+  			var forward = new THREE.Vector3(curvegeo1.vertices[j+1].x - curvegeo1.vertices[j].x, 
+							  				curvegeo2.vertices[j+1].x - curvegeo2.vertices[j].x, 
+							  				curvegeo2.vertices[j+1].y - curvegeo2.vertices[j].y).normalize();
   			var left = new THREE.Vector3(up.x, up.y, up.z).normalize();
   			left.cross(forward).normalize();
 
@@ -698,6 +739,7 @@ function createInterConnectingWalkWays(verts, walkway)
   				  	var perpPos = new THREE.Vector3(curvepos.x, curvepos.y, curvepos.z);
 					var temp = new THREE.Vector3(left.x, left.y, left.z);
 					perpPos.x += temp.x*k;
+					perpPos.y += temp.y*k;
 					perpPos.z += temp.z*k;
 					walkway.push(perpPos);
   				}
@@ -706,7 +748,7 @@ function createInterConnectingWalkWays(verts, walkway)
   	}
 }
 
-function interLayerWalkways(walkway)
+function interLayerWalkwaysOld(walkway)
 {
 	var index = 0;
 	var verts = [];
@@ -739,6 +781,7 @@ function interLayerWalkways(walkway)
 					// debugger;
 					for(var a=0; a<grid[index].slabs.length; a++)
 					{
+						debugger;
 						connectableCells.push(grid[index].slabs[a]);
 					}
 				}
@@ -757,6 +800,64 @@ function interLayerWalkways(walkway)
 	debugger;
 
 	var height = (currCell.center.y + toCell.center.y)*0.5;
+	createInterConnectingWalkWays(verts, walkway);
+}
+
+function interLayerWalkways(walkway)
+{
+	var index = 0;
+	var verts = [];
+	//for every n randomly chosen slabs connect them to some other slab in the layer above it
+	for(var i=0; i<level3D.numberOfLayers-1; i++)
+	{
+		//for every layer
+		//pick an x number of slabs
+		var n = 5+RAND.random()*10;
+
+		for(var j=0; j<n; j++)
+		{
+			var ind1 = Math.floor(RAND.random()*levelLayers[i].cellList.length);
+			var currCell = levelLayers[i].cellList[ind1];
+
+			var connectableCells = [];
+			//search in the layers above the cell in some radius
+			//cells to the right and towards the camera; -- add thing for other way too
+			for(var k=i+1; k<Math.min(i+2, level3D.numberOfLayers); k++)
+			{
+				for(var m=0; m<levelLayers[k].cellList.length; m++)
+				{
+					var toCell = levelLayers[k].cellList[m];
+
+					if(currCell == toCell)
+					{
+						continue;
+					}
+
+					var dist = currCell.center.distanceTo(toCell.center);
+					var radius = 75.0;
+					if(dist < radius)
+					{
+						//create a list of those cells
+						connectableCells.push(toCell);
+					}					
+				}
+			}
+			
+			//pick a random cell from that list and connect the original cell to the chosen cell 
+			var ind2 = Math.floor(RAND.random()*connectableCells.length);
+			var toCell = connectableCells[ind2];
+
+			var p1 = new THREE.Vector3( currCell.center.x, currCell.center.y, currCell.center.z );
+			var p2 = new THREE.Vector3( toCell.center.x, toCell.center.y, toCell.center.z );
+
+			//figure out which direction they walkway goes in and change p1 and p2 by width or length
+			pathShifting(p1, p2, currCell, toCell);
+
+			verts.push(p1);
+			verts.push(p2);
+		}
+	}
+
 	createInterConnectingWalkWays(verts, walkway);
 }
 
@@ -854,8 +955,6 @@ function onLoad(framework)
 // called on frame updates
 function onUpdate(framework)
 {
-
-
 }
 
 // when the scene is done initializing, it will call onLoad, then on frame updates, call onUpdate
