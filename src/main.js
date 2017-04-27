@@ -58,8 +58,6 @@ var floor_Material = new THREE.ShaderMaterial({
   vertexShader: require('./shaders/lambert-withTexture-vert.glsl'),
   fragmentShader: require('./shaders/lambert-withTexture-frag.glsl')
 });
-// floor_Material = new THREE.MeshPhongMaterial({color: 0xdd3311});
-
 
 // material for instanced objects
 var voxelMat = new THREE.RawShaderMaterial({
@@ -97,6 +95,10 @@ var grid = [];
 var connectingWalkways = []; //list of walkwaylayers connecting
 //grid indexing scheme: index = currIndy*gridsize*gridsize + currIndx*gridsize + currIndz;
 var gridsize = 20;
+
+//------------------------------------------------------------------------------
+
+var flagtexture = false;
 
 //------------------------------------------------------------------------------
 
@@ -170,6 +172,7 @@ function onreset( scene )
 {
 	cleanscene(scene);
 	create3DMap(scene);
+	createTerrain(scene);
 }
 
 function cleanscene(scene)
@@ -836,7 +839,7 @@ function interLayerWalkways(walkway)
 	{
 		//for every layer
 		//pick an x number of slabs
-		var n = 5+RAND.random()*10;
+		var n = 5+RAND.random()*5;//level3D.numberOfLayers*map2D.numberOfCells;
 
 		for(var j=0; j<n; j++)
 		{
@@ -858,12 +861,13 @@ function interLayerWalkways(walkway)
 					}
 
 					var dist = currCell.center.distanceTo(toCell.center);
-					var radius = 800.0; //height between layers is 20 and so this has to be greater than 20^2 and then some
-					if(dist < radius)
+					var spacing = 12.0;
+					var radius = 23.0 + spacing; //height between layers is 20 and so this has to be greater than 20^2 and then some
+					if(dist > radius)
 					{
 						//create a list of those cells
 						connectableCells.push(toCell);
-					}					
+					}				
 				}
 			}
 			
@@ -952,14 +956,50 @@ function create3DMap(scene)
 
 	populateGrid();
 	interLayerWalkways(walkwayLayer.walkway);
-	
-	// console.log(walkwayLayer.walkway);
 
 	walkwayLayer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
 	setWalkWayVoxels(walkwayLayer.instancedWalkway, walkwayLayer.walkway);
 
 	//add walkway to scene
 	scene.add(walkwayLayer.instancedWalkway);
+}
+
+//------------------------------------------------------------------------------
+
+// var texture, imagedata;
+
+// texture = THREE.ImageUtils.loadTexture( "textures/sprites/spark1.png", new THREE.UVMapping(), function ( event ) {
+
+//     imagedata = getImageData( texture.image );
+
+// } );
+
+//2D texture based 3 component 1D, 2D, 3D noise
+// vec3 noise(float p){return texture(iChannel0,vec2(p/iChannelResolution[0].x,.0)).xyz;}
+// vec3 noise(vec2 p){return texture(iChannel0,p/iChannelResolution[0].xy).xyz;}
+// vec3 noise(vec3 p){float m = mod(p.z,1.0);float s = p.z-m; float sprev = s-1.0;if (mod(s,2.0)==1.0) { s--; sprev++; m = 1.0-m; };return mix(texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(sprev).yz).xyz,texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(s).yz).xyz,m);}
+
+// vec3 noise(float p, float lod){return texture(iChannel0,vec2(p/iChannelResolution[0].x,.0),lod).xyz;}
+// vec3 noise(vec2 p, float lod){return texture(iChannel0,p/iChannelResolution[0].xy,lod).xyz;}
+// vec3 noise(vec3 p, float lod){float m = mod(p.z,1.0);float s = p.z-m; float sprev = s-1.0;if (mod(s,2.0)==1.0) { s--; sprev++; m = 1.0-m; };return mix(texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(sprev,lod).yz,lod).xyz,texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(s,lod).yz,lod).xyz,m);}
+
+
+function noise(var p)
+{
+	return texture(iChannel0,vec2(p/iChannelResolution[0].x,.0)).xyz;
+}
+
+function createTerrain(scene)
+{
+	// float q = length(p.xz)*.125;
+	// float lod = -16.0;
+	// vec3 nnn = noise(p*.125,lod);
+	// vec3 n1 =  p.y*.0125+nnn*8.0;
+	// vec3 n2 = p.y*.15+noise(p*.25+nnn.y,lod)*4.0;
+	// vec3 n3 = noise(p*vec3(1.0,0.5,1.0)+nnn.z,lod);
+	// float d = n1.x+n2.x+n3.x + noise(p.xz*4.10).x*.44*nnn.z;
+	// float density  = max(.0,pow(-p.y*.5,2.5)*.2)*(max(.0,pow(n1.y+nnn.z*.5+n2.y*.1,3.0)*.0000016)+.000025);
+	// return vec2(d,density*.3);
 }
 
 //------------------------------------------------------------------------------
@@ -978,6 +1018,7 @@ function onLoad(framework)
 
 	initgrid();
 	create3DMap(scene);
+	createTerrain(scene);
 }
 
 // called on frame updates
