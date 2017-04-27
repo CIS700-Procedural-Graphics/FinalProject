@@ -45,7 +45,7 @@ export default class Sequencer{
         //musical paramaters
         this.musicParams = {
             meter: 4.0, //beats per measure - no denominator for now
-            beatDur: 500, //beat duration in msec
+            beatDur: 600, //beat duration in msec
             
             //Num of divisions per quarter-note beat to quantize things to
             //12 - 16th notes and 16th triplets within a beat

@@ -131,17 +131,37 @@ var TXinit = function(){
         var VX = MX.VXlist[0]; //expecting just one
         //For now, all directions start at same time. I suppose at some point
         // we not want them to?
-        VX.setPerfBeatStart(MX.times.perfBeatQ ); //Use Raw or Quantized?
+        var MXstartBeat = MX.times.perfBeatQ; //Use Raw or Quantized???
+        VX.setPerfBeatStart( MXstartBeat ); 
 
         //Each direction can have a separate end time
         //Lateral is main displacement - always end on the next beat for now
         //0 signifies do nothing
         var nextBeat = Math.floor( VX.perfBeatStart + 1.0 );
-        var perfBeatEnd = [ nextBeat, 0, 0 ];
+        var diff = nextBeat - MXstartBeat;
+        var perfBeatEnd = [ nextBeat, nextBeat, nextBeat ];
         VX.setPerfBeatEnd( perfBeatEnd );
 
         //Maximum relative displacement in each direction under 'normal' conditions.
-        var scaleNorm = [ 1.0, 0, 0 ]; //just lateral for now
+        var sx = 0, sy = 0, sz = 0;
+        var beatDiv = MX.firstME.times.beatDiv; //beat div of [0,11]
+        sx = 0.3;
+        sy = 0.1;
+        sz = -0.3;
+        /*
+        if( MX.gravity  == 'grounding'){
+            sx += 0.4;
+            switch( beatDiv ){
+                case(0): sx += 0.4; sy -= 0.2; break;
+                case(6): sx += 0.2; sy -= 0.1; break;
+                sz += 0.25; break; //z moves positive cuz velocity is -z
+
+            }
+        }else{
+            //gravity == lifting
+
+        }*/
+        var scaleNorm = [ sx, sy, sz ]; //just lateral for now
         VX.setScaleNorm( scaleNorm ); 
 
         //Mark MX as done since this is instantaneous and the VX will continue on its own

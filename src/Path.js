@@ -149,9 +149,9 @@ export class PathContainer{
         this.lineBufferGeometry.attributes.position.needsUpdate = true; // required after the first render
     }
 
-    //Return the Object3D to add to scene for rendering
-    getSceneObject(){
-        return this.lineObject3D;
+    //Add the Object3D to scene for rendering
+    addSceneObjects( scene ){
+        scene.add( this.lineObject3D );
     }
 
     //Clean objects from scene. See top-level version for notes.

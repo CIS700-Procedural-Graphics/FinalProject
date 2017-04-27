@@ -10,6 +10,16 @@ import {PowerCurve3, PowerCurve} from './powerCurve.js'
 import DAT from 'dat-gui'
 
 ///
+//a-b values for each of the three PowerCurves used
+// in a VXpathDisplacment. Have to put them here since we can't 
+// have gui for each fleeting VXpathDisplacement instance. F'ed up.
+//We'll need some param object for VX types that sets default
+// vals for each instance, and probably gets assigned to a translator
+// so it can be varied passed for a given translation mapping.
+//
+//This is a string so we can have single input object and user
+// must type vals like this to get them to work:
+var g_curveABs = { str: '[1,2.2,1,2.2,1,2.2]' };
 
 export var g_VXmanager = {}; //gets set when VXmanager is instantiated
 
@@ -25,10 +35,11 @@ export class VisualExpressionSuper{ //"base class""
         //These params may be arrays of values, depending on VX
         //
         this.perfBeatStart = 0; //Starting beat relative to performance start
-        this.perfBeatEnd = 0; //Ending beat. May or may not be inclusive, depending on expression
+        this.perfBeatEnd = Number.MAX_VALUE; //Ending beat. May or may not be inclusive, depending on expression
         
         //Last time this VX was updated. Used to know if it's been updated
-        // yet for the current frame
+        // yet for the current frame, or to calc beat-diff since last update.
+        //Doesn't get updated to current time until updateForFrame() and updateBytype() are done.
         this.lastUpdateBeat = -1;
 
         this.VXinputs = []; //VX(s) that this VX gets data/state from. So e.g. for sparks,
@@ -90,6 +101,7 @@ export class VisualExpressionSuper{ //"base class""
         //Check if this VX is done
         this.checkIfDone( musicalTiming);
 
+        //**DO THIS LAST**
         //update its update time
         this.lastUpdateBeat = musicalTiming.perfBeatRaw;
     }
@@ -124,9 +136,9 @@ export class VisualExpressionSuper{ //"base class""
         this.scaleNorm = scaleNorm;
     }
     
-    //Each VX must override this IF it has THREE.js Object3D to render
-    getSceneObject(){
-        return null;
+    //Each VX must override this IF it has THREE.js Object3D to render,
+    // in which case it should add its object to scene
+    addSceneObjects( scene ){
     }
 
     //If VX has any THREE.js render-related object, it will clean them.
@@ -193,6 +205,7 @@ export class VXpathDisplacement extends VisualExpressionSuper{
         super( 'pathDisplacement', instanceName );
 
         //Type-specific params, if any, goes into this.ts
+        //Ugly hack to get simple gui to change all vals
         this.ts = {
 
             //The lateral/vertical/forward (just x/y/z for now, really) offset
@@ -201,7 +214,7 @@ export class VXpathDisplacement extends VisualExpressionSuper{
             currentDisplacement3: [],
 
             //The displacement. PowerCurve for each direction
-            curves: new PowerCurve3(1,1),
+            curves: new PowerCurve3(g_curveABs.str),
 
         }
 
@@ -235,7 +248,7 @@ export class VXpathDisplacement extends VisualExpressionSuper{
         //Find the fractional position within the duration of this VX
         //Used to evaluate assigned curve.
         var fractions = [];
-        var active = [1,1,1];
+        var active = [1,1,1]; //lets us easily silence directions that end earlier
         //One end-time for each dimension
         //Have to specially handle if one or two dimension is done already before other(s)
         for( var ind in this.perfBeatEnd ){
@@ -311,33 +324,30 @@ export class VXpath extends VisualExpressionSuper{
             //Size of one spatial unit in terms of 3D space - what are these units called?
             spatialUnit: 5.0, 
 
-            //a-b values for each of the three PowerCurves used
-            // in a VXpathDisplacment. Have to put them here since we can't 
-            // have gui for each fleeting VXpathDisplacement instance.
-            //We'll need some param object for VX types that sets default
-            // vals for each instance, and probably gets assigned to a translator
-            // so it can be varied passed for a given translation mapping.
-            curveABs: [1,1,1,1,1,1],
         }
     }
 
     //Each VX must override this if ti has a THREE.js Object3D to render
-    getSceneObject(){
-        return this.ts.path.getSceneObject();
+    addSceneObjects( scene ){
+        this.ts.path.addSceneObjects( scene );
     }
 
     cleanFromScene( scene ){
         this.ts.path.cleanFromScene( scene );
     }
 
-    //Return arr3 point that this VX wants to be its
-    // focus.
+    //Return the lead point of the path
+    getCurrentPoint(){
+        return this.ts.path.getCurrentPointInfo().cpt;
+    }
+
+    //Return arr3 point that this VX wants to be its camera focus.
     getFocusPoint(){
         //To follow the front of the path itself:
         //return this.ts.path.getCurrentPointInfo().cpt;
 
         //To follow progress along z, real dumb for now
-        return [0,0, this.ts.path.getCurrentPointInfo().cpt[2] ];
+        return [0,0, this.getCurrentPoint()[2] ];
     }
 
     //Get called by main VX update func
@@ -378,14 +388,150 @@ export class VXpath extends VisualExpressionSuper{
         //I don't like coding deep into this like this, but hack it for now.
         var f = gui.addFolder(this.instanceName);
         f.add( this.ts.path, 'drawRangeLengthInd', 0, 100 );
-        for( var ind = 0; ind < 6; ind+=2 ){
-            var name = 'PCurve ' + ind;
-            f.add( this.ts.curveABs, ind.toString(), 0.1,2.0).name(name+' a');
-            f.add( this.ts.curveABs, (ind+1).toString(), 0.1,2.0).name(name+' b');
- //           fuck how do I get these vals into the VXpathDisp object????
-        }
+        //These are the a,b vals for PowerCurve used for 
+        f.add( g_curveABs, 'str', 0.1,2.0).name('PCurve a,b array');
     }
 }
+
+//
+//VXstarField
+//
+//Thanks to http://codepen.io/GraemeFulton/pen/BNyQMM
+//
+//NOTE - with the current model of the camera following the path/runner down the -z axis,
+// all positions are absolute. So the star field won't actually move, we'll move through it.
+// As we move though, we have to change stars' z position as the go past us to keep 
+// refreshing things.
+export class VXstarField extends VisualExpressionSuper{
+    constructor( instanceName ){
+        super( 'starField', instanceName );
+
+        this.ts = {
+            numStars: 100,
+            //Width and height of start placement
+            fieldX: 120,
+            fieldY: 120,
+            fieldZ: 200, //from 0,0,0 to 0,0,-fieldZ. i.e. not symmetrical for now at least
+                          //Although making symmetrical would be easy way to have stars going
+                          // when rotate camera around
+            speed: 16,   //spacial units per beat
+            starSpheres: [],
+            materials: [],
+            geometries: [],
+        }
+
+        this.init();
+    }
+
+    init(){
+        for( var ind=0; ind < this.ts.numStars; ind++ ){
+            var geometry   = new THREE.SphereGeometry(0.1, 8, 8);   //, 16, 16)
+            var material = new THREE.MeshBasicMaterial( {color: 0xddddff} );
+            var sphere = new THREE.Mesh(geometry, material)
+            
+            sphere.position.fromArray( this.getRandomPos() );
+            this.ts.starSpheres.push( sphere );
+            this.ts.materials.push(material);
+            this.ts.geometries.push(geometry);
+        }
+    }
+
+    getRandomPos(){
+        var x = (Math.random() - 0.5 ) * this.ts.fieldX;
+        //Move position away from center line to avoid starts coming straight down the middle
+        x += Math.sign(x) * 2;
+        var y = (Math.random() - 0.5 ) * this.ts.fieldY;
+        y += Math.sign(y) * 2;
+        var z = -1 * Math.random() * this.ts.fieldZ;
+        return [x,y,z];                 
+    }
+
+    updateByType( musicalTiming ){
+        //The stars stay in place. The path moves through space and we move the
+        // camera. So check if star is likely out of view and if so restart it.
+        var focusPoint = g_VXmanager.getCameraFocus();
+        for( var ind=0; ind < this.ts.numStars; ind++ ){
+            var pos = this.ts.starSpheres[ind].position;
+            pos.setZ( pos.z + this.ts.speed * ( musicalTiming.perfBeatRaw - this.lastUpdateBeat) );
+            if( pos.z > focusPoint.z ){
+                //reposition the star
+                var newPos = this.getRandomPos();
+                newPos[2] = focusPoint.z - this.ts.fieldZ; //move all the way to the back
+                pos.fromArray( newPos );
+            }
+        }        
+    }
+
+    setupGUI( gui ){
+        //length of main trail
+        //I don't like coding deep into this like this, but hack it for now.
+        var f = gui.addFolder(this.instanceName);
+        f.add( this.ts, 'speed',1,100 );
+    }
+
+    addSceneObjects( scene ){
+        for( var ind=0; ind < this.ts.numStars; ind++ ){
+            scene.add( this.ts.starSpheres[ind] );
+        }
+    }
+
+    cleanFromScene( scene ){
+        for( var ind=0; ind < this.ts.numStars; ind++ ){
+            scene.remove( this.ts.starSpheres[ind] );
+            // clean up memory
+            this.ts.geometries[ind].dispose();
+            this.ts.materials[ind].dispose();
+            // texture.dispose();
+        }
+    }
+
+}//VXstarField
+
+/////////////////////////////////
+//VXrunner
+//
+//Dude that follows a main path (or whatever other input gives him a position, I suppose)
+//
+export class VXrunner extends VisualExpressionSuper{
+    constructor( instanceName ){
+        super( 'runner', instanceName );
+
+        this.ts = {
+
+        }
+
+        //Render object - for now just one type
+        //Can't create within define of ts above cuz can't reference params until object is created
+        this.ts.material = new THREE.MeshPhongMaterial( 0xaa1188 );
+        this.ts.geom = new THREE.SphereGeometry( 0.04, 24, 24 );
+        this.ts.object3D = new THREE.Mesh( this.ts.geom, this.ts.material );
+
+    }//ctor
+
+    updateByType( musicalTiming ){
+        for( var VX of this.VXinputs ){
+            //Eventually we want to query by type of data/info that VX can supply
+            if( VX.type == 'path' ){ 
+                //VX will have already been updated by call in base class
+                var pos = VX.getCurrentPoint();
+                this.ts.object3D.position.fromArray( pos );
+            }
+        }
+    }
+
+    //Each VX must override this if ti has a THREE.js Object3D to render
+    addSceneObjects( scene ){
+        scene.add( this.ts.object3D );
+    }
+
+    cleanFromScene( scene ){
+        scene.remove( this.ts.object3D );
+        // clean up memory
+        this.ts.geom.dispose();
+        this.ts.material.dispose();
+        // texture.dispose();
+    }
+}//VXdude
 
 //////////////////////////////////
 //
@@ -418,15 +564,21 @@ export class VXmanager{
     // and other basic stuff has been set up by sequencer
     initializeVXs(){
         //Some hard-coded VX objects for now. Have to sort this all out
-        //
+        
+        //Runner
+        this.VXrunner = this.createNewVXs( 'runner', 'runner')[0];
+        this.addNewVXs( [this.VXrunner], null );
+
         //The main path
         this.VXmainPath = this.createNewVXs( 'path', 'main_path' )[0];
-        //new VXpath( 'mainPath_' + this.getNextUniqID() );
-        this.addNewVXs( [this.VXmainPath], null );
+        this.addNewVXs( [this.VXmainPath], this.VXrunner /*receiver*/ );
         //Init vals here since it won't get genereated by an MX
-        this.VXmainPath.setPerfBeatStart( 0 );
-        this.VXmainPath.setPerfBeatEnd( Number.MAX_VALUE ); //doesn't end
-        this.VXmainPath.setScaleNorm( 1 ); //not sure what to do heregetSceneObject
+        this.VXmainPath.setScaleNorm( 1 ); //not sure what to do here
+
+        //Star Field
+        this.VXstarField = this.createNewVXs( 'starField', 'starField')[0];
+        this.addNewVXs( [this.VXstarField], null );
+
     }
 
     //We're counting on this getting called at begin of app launch when
@@ -445,7 +597,17 @@ export class VXmanager{
         this.cameraSetDefaults();
         this.cameraUpdate();
         this.setupGUI();
+        this.initLights();
+    }
 
+    initLights(){
+        //DirectionLight has a position and a target. Target default is 0,0,0, but
+        // otherwise acts as infinitely far light source yielding parallel light rays.
+        this.lightDirectional = new THREE.DirectionalLight( 0xffffff, 0.5 );
+        this.lightDirectional.position.set( -1,1,0.5);
+        this.scene.add( this.lightDirectional );
+        this.lightAmbient = new THREE.AmbientLight( 0xbbbbff, 0.1 );
+        this.scene.add( this.lightAmbient );
     }
 
     //Create a separate guif from the one made by sequencer.
@@ -478,6 +640,13 @@ export class VXmanager{
         this.camera.updateProjectionMatrix();
     }
 
+    //Returns point at which camera is focused.
+    //e.g. for star field. will also want to know which way it's looking too, probably
+    //Returns Vector3
+    getCameraFocus(){
+        return this.cameraState.lookAt;
+    }
+
     //Update camera's position based on some target VX
     cameraUpdateForTarget( VX ){
         //Returns an arr3 at which to focus the camera
@@ -492,9 +661,10 @@ export class VXmanager{
         //this.cameraState.pos.add( diff );
 
         //Move camera position justalong -z to keep up with motion along -z,
-        // and allow lookat to follow whatever focus point is
+        // and allow lookat to follow whatever focus point is passed
         diff.setX(0);
         diff.setY(0);
+        this.cameraState.pos.copy( this.camera.position );
         this.cameraState.pos.add( diff );
 
         this.cameraUpdate();
@@ -563,20 +733,16 @@ export class VXmanager{
         this.scene.add( obj );
     }
 
-    //query the VX (single or array) for a scene object and add
-    // to scene if one is returned. Not sure
-    // where this really belongs.
+    //Tell each VX (single or array) to add its scene object(s)
+    // Not sure where this really belongs.
     addSceneObjectFromVX( VXlist ){
         var list = VXlist;
         if( ! (VXlist instanceof Array ) ){
             list = [VXlist];
         }
         for( var VX of list ){
-            var obj = VX.getSceneObject();
-            if( obj !== null )
-                this.scene.add( obj );
+            VX.addSceneObjects( this.scene );
         }
-
     }
 
     //Create and return one or more VXs based on type name
@@ -605,13 +771,15 @@ export class VXmanager{
             var VX = {};
             switch( type ){
                 case 'pathDisplacement':
-                    VX = new VXpathDisplacement( instanceName );
-                    break;
+                    VX = new VXpathDisplacement( instanceName ); break;
                 case 'path':
-                    VX = new VXpath( instanceName );
-                    break;
+                    VX = new VXpath( instanceName ); break;
+                case 'runner':
+                    VX = new VXrunner( instanceName ); break;
+                case 'starField':
+                    VX = new VXstarField( instanceName ); break;
                 default:
-                    throw 'Unrecognized VX type: ' + type;
+                    throw 'Unrecognized VX type: ' + type; break;
             }
             //Set the uniq ID. 
             VX.uniqID = uniqID;
