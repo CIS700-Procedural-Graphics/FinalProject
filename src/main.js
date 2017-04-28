@@ -4,6 +4,7 @@ const THREE = require('three'); // older modules are imported like this. You sho
 import Framework from './framework'
 import DAT from 'dat-gui'
 var OBJLoader = require('three-obj-loader');
+var textureLoader = new THREE.TextureLoader();
 import Cell from './cell'
 import VoronoiPoint from './voronoiPoint'
 import Layer from './layer'
@@ -20,6 +21,8 @@ var Pi = 3.14;
 
 var generalParameters = {
   Collisions: false,
+  Fog: false,
+  FogDensity: 0.02,
   voxelsize: 0.45
 }
 
@@ -42,7 +45,7 @@ var floor_Material = new THREE.ShaderMaterial({
   {
   	image1: { // Check the Three.JS documentation for the different allowed types and values
       type: "t",
-      value: THREE.ImageUtils.loadTexture('./images/ground1.jpg')
+      value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/floor/stone.png')
     },
     ambientLight:
     {
@@ -60,22 +63,51 @@ var floor_Material = new THREE.ShaderMaterial({
 });
 
 // material for instanced objects
-var voxelMat = new THREE.RawShaderMaterial({
+var pathMat = new THREE.RawShaderMaterial({
 	  uniforms:
 	  {
 	  	image1: { // Check the Three.JS documentation for the different allowed types and values
 	      type: "t",
-	      value: THREE.ImageUtils.loadTexture('./images/ground1.jpg')
+	      value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/path/TilingStone1.jpg')
 	    },
+	    // image2: { // Check the Three.JS documentation for the different allowed types and values
+	    //   type: "t",
+	    //   value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/path/stoneNormal.png')
+	    // },
 	    ambientLight:
 	    {
 	        type: "v3",
-	        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
+	        value: new THREE.Vector3( 0.1, 0.1, 0.1 )
 	    },
 	    lightVec:
 	    {
 	        type: "v3",
 	        value: new THREE.Vector3( 10, 10, 10 )
+	    },
+	    camPos:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 10, 10, 10 )
+	    },
+	    fogSwitch:
+	    {
+	        type: "i",
+	        value: 0
+	    },
+	    fogColor:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 0.5, 0.5, 0.5 )
+	    },
+	    fogDensity:
+	    {
+	        type: "f",
+	        value: generalParameters.FogDensity
+	    },
+	    rimColor:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 0.1, 0.1, 0.1 )
 	    },
 	    color:
 	    {
@@ -83,8 +115,8 @@ var voxelMat = new THREE.RawShaderMaterial({
 	        value: new THREE.Vector3( 1.0, 0.3, 0.3 )
 	    },
 	  },
-	vertexShader: require ('./shaders/instance-vert.glsl') ,
-	fragmentShader: require ('./shaders/instance-frag.glsl'),
+	vertexShader: require ('./shaders/paths-vert.glsl') ,
+	fragmentShader: require ('./shaders/paths-frag.glsl'),
 	side: THREE.DoubleSide
 } );
 
@@ -98,7 +130,7 @@ var gridsize = 20;
 
 //------------------------------------------------------------------------------
 
-var flagtexture = false;
+var noiseData;
 
 //------------------------------------------------------------------------------
 
@@ -126,6 +158,14 @@ function changeGUI(gui, camera, scene)
 		map2D.crumbleStatus = 0.3 + 0.5*map2D.crumbleStatus;
 	});
 
+	var fog = tweaks.addFolder('Fog');
+	fog.add(generalParameters, 'Fog').onChange(function(newVal) {
+		pathMat.fogSwitch = (pathMat.fogSwitch + 1)%2;
+	});
+	fog.add(generalParameters, 'FogDensity', 0.01, 0.1).onChange(function(newVal) {
+		pathMat.fogDensity = newVal;
+	});
+
 	gui.add(generalParameters, 'Collisions').onChange(function(newVal) {});
 
 	var text = new TextActions(scene);
@@ -149,6 +189,7 @@ function setupLightsandSkybox(scene, camera, renderer)
 	directionalLight.position.multiplyScalar(10);
 	scene.add(directionalLight);
 	floor_Material.lightVec = directionalLight.position;
+	pathMat.lightVec = directionalLight.position;
 
 	// set skybox
 	var loader = new THREE.CubeTextureLoader();
@@ -160,7 +201,8 @@ function setupLightsandSkybox(scene, camera, renderer)
 	] );
 	// scene.background = skymap;
 
-	renderer.setClearColor( 0xbfd1e5 );
+	// renderer.setClearColor( 0xbfd1e5 );
+	renderer.setClearColor( 0x7f7f7f );
 	scene.add(new THREE.AxisHelper(20));
 
 	// set camera position
@@ -896,7 +938,7 @@ function create3DMap(scene)
 	var floorOffset = 20;
 	var h = 0;
 	for(var i=0; i<level3D.numberOfLayers; i++)
-	{		
+	{
 		//new layer
 		var layer = new Layer();
 
@@ -917,8 +959,8 @@ function create3DMap(scene)
 			        value: new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() )
 			    }
 			  },
-			vertexShader: require ('./shaders/instance-vert.glsl') ,
-			fragmentShader: require ('./shaders/instance-frag.glsl'),
+			vertexShader: require ('./shaders/walkway-vert.glsl') ,
+			fragmentShader: require ('./shaders/walkway-frag.glsl'),
 			side: THREE.DoubleSide,
 			transparent: false
 		} );
@@ -937,21 +979,7 @@ function create3DMap(scene)
 	//now connect layers
 	//new geometry and material for between layer connections
 	var geo = new THREE.InstancedBufferGeometry();
-
-	var mat = new THREE.RawShaderMaterial({
-	  uniforms:
-	  {
-	    color:
-	    {
-	        type: "v3",
-	        value: new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() )
-	    }
-	  },
-	vertexShader: require ('./shaders/instance-vert.glsl') ,
-	fragmentShader: require ('./shaders/instance-frag.glsl'),
-	side: THREE.DoubleSide
-	});
-
+	var mat = pathMat;
 	var walkwayLayer = new WalkwayLayer();
 
 	populateGrid();
@@ -965,14 +993,27 @@ function create3DMap(scene)
 }
 
 //------------------------------------------------------------------------------
+//Resource: https://github.com/mrdoob/three.js/issues/7647
 
-// var texture, imagedata;
+function getImageData( image ) {
 
-// texture = THREE.ImageUtils.loadTexture( "textures/sprites/spark1.png", new THREE.UVMapping(), function ( event ) {
+    var canvas = document.createElement( 'canvas' );
+    canvas.width = image.width; //<--- error here
+    canvas.height = image.height;
 
-//     imagedata = getImageData( texture.image );
+    var context = canvas.getContext( '2d' );
+    context.drawImage( image, 0, 0 );
 
-// } );
+    return context.getImageData( 0, 0, image.width, image.height );
+
+};
+
+function getPixel( imagedata, x, y ) {
+
+    var position = ( x + imagedata.width * y ) * 4; 
+    var data = imagedata.data;
+    return { r: data[ position ], g: data[ position + 1 ], b: data[ position + 2 ], a: data[ position + 3 ] };
+};
 
 //2D texture based 3 component 1D, 2D, 3D noise
 // vec3 noise(float p){return texture(iChannel0,vec2(p/iChannelResolution[0].x,.0)).xyz;}
@@ -984,22 +1025,38 @@ function create3DMap(scene)
 // vec3 noise(vec3 p, float lod){float m = mod(p.z,1.0);float s = p.z-m; float sprev = s-1.0;if (mod(s,2.0)==1.0) { s--; sprev++; m = 1.0-m; };return mix(texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(sprev,lod).yz,lod).xyz,texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(s,lod).yz,lod).xyz,m);}
 
 
-function noise(var p)
+function noise(p)
 {
-	return texture(iChannel0,vec2(p/iChannelResolution[0].x,.0)).xyz;
+	//96x96 image
+	var u = p/96;
+	var v = p/96;
+	return getPixel( noiseData, u, v );
 }
 
 function createTerrain(scene)
 {
-	// float q = length(p.xz)*.125;
-	// float lod = -16.0;
-	// vec3 nnn = noise(p*.125,lod);
-	// vec3 n1 =  p.y*.0125+nnn*8.0;
-	// vec3 n2 = p.y*.15+noise(p*.25+nnn.y,lod)*4.0;
-	// vec3 n3 = noise(p*vec3(1.0,0.5,1.0)+nnn.z,lod);
-	// float d = n1.x+n2.x+n3.x + noise(p.xz*4.10).x*.44*nnn.z;
-	// float density  = max(.0,pow(-p.y*.5,2.5)*.2)*(max(.0,pow(n1.y+nnn.z*.5+n2.y*.1,3.0)*.0000016)+.000025);
-	// return vec2(d,density*.3);
+	var texture;
+	texture = THREE.ImageUtils.loadTexture( "/images/noiseTextures/RGBANoiseMedium.png", THREE.UVMapping, function ( event ) {
+
+	    noiseData = getImageData( texture.image );
+
+	    //for every point
+	    var p = new THREE.Vector3(0.0); //define point inside all slabs
+
+	    var pXZ = new THREE.Vector2(p.x, p.z);
+	    var q = pXZ.length()*0.125;
+		var lod = -16.0;
+
+		var temp; 
+		temp = noise(p*.125,lod);
+		var nnn = new THREE.Vector3(temp.x, temp.y, temp.z);
+		// vec3 n1 =  p.y*.0125+nnn*8.0;
+		// vec3 n2 = p.y*.15+noise(p*.25+nnn.y,lod)*4.0;
+		// vec3 n3 = noise(p*vec3(1.0,0.5,1.0)+nnn.z,lod);
+		// float d = n1.x+n2.x+n3.x + noise(p.xz*4.10).x*.44*nnn.z;
+		// float density  = max(.0,pow(-p.y*.5,2.5)*.2)*(max(.0,pow(n1.y+nnn.z*.5+n2.y*.1,3.0)*.0000016)+.000025);
+		// return vec2(d,density*.3);
+	} );
 }
 
 //------------------------------------------------------------------------------
@@ -1024,6 +1081,16 @@ function onLoad(framework)
 // called on frame updates
 function onUpdate(framework)
 {
+	if(pathMat.camPos)
+	{
+		pathMat.camPos.x = framework.camera.position.x;
+		pathMat.camPos.y = framework.camera.position.y;
+		pathMat.camPos.z = framework.camera.position.z;
+	}
+	// if(pathMat.fogSwitch)
+	// {
+	// 	pathMat.fogSwitch = pathMat.fogSwitch;
+	// }
 }
 
 // when the scene is done initializing, it will call onLoad, then on frame updates, call onUpdate
