@@ -1,4 +1,5 @@
 //skybox images from: https://github.com/simianarmy/webgl-skybox/tree/master/images
+//noise function by inigo quilez: https://www.shadertoy.com/view/XsX3RB
 
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about this much
 import Framework from './framework'
@@ -45,7 +46,7 @@ var floor_Material = new THREE.ShaderMaterial({
   {
   	image1: { // Check the Three.JS documentation for the different allowed types and values
       type: "t",
-      value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/floor/stone.png')
+      value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/floor/ground1.jpg')
     },
     ambientLight:
     {
@@ -158,13 +159,13 @@ function changeGUI(gui, camera, scene)
 		map2D.crumbleStatus = 0.3 + 0.5*map2D.crumbleStatus;
 	});
 
-	var fog = tweaks.addFolder('Fog');
-	fog.add(generalParameters, 'Fog').onChange(function(newVal) {
-		pathMat.fogSwitch = (pathMat.fogSwitch + 1)%2;
-	});
-	fog.add(generalParameters, 'FogDensity', 0.01, 0.1).onChange(function(newVal) {
-		pathMat.fogDensity = newVal;
-	});
+	// var fog = tweaks.addFolder('Fog');
+	// fog.add(generalParameters, 'Fog').onChange(function(newVal) {
+	// 	pathMat.fogSwitch = (pathMat.fogSwitch + 1)%2;
+	// });
+	// fog.add(generalParameters, 'FogDensity', 0.01, 0.1).onChange(function(newVal) {
+	// 	pathMat.fogDensity = newVal;
+	// });
 
 	gui.add(generalParameters, 'Collisions').onChange(function(newVal) {});
 
@@ -985,7 +986,7 @@ function create3DMap(scene)
 	populateGrid();
 	interLayerWalkways(walkwayLayer.walkway);
 
-	walkwayLayer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
+	walkwayLayer.instancedWalkway = initwalkwayGeo(scene, geo, mat);
 	setWalkWayVoxels(walkwayLayer.instancedWalkway, walkwayLayer.walkway);
 
 	//add walkway to scene
@@ -993,10 +994,9 @@ function create3DMap(scene)
 }
 
 //------------------------------------------------------------------------------
-//Resource: https://github.com/mrdoob/three.js/issues/7647
 
-function getImageData( image ) {
-
+function getImageData( image ) 
+{
     var canvas = document.createElement( 'canvas' );
     canvas.width = image.width; //<--- error here
     canvas.height = image.height;
@@ -1005,35 +1005,97 @@ function getImageData( image ) {
     context.drawImage( image, 0, 0 );
 
     return context.getImageData( 0, 0, image.width, image.height );
-
 };
 
-function getPixel( imagedata, x, y ) {
-
+function getPixel( imagedata, x, y ) 
+{
     var position = ( x + imagedata.width * y ) * 4; 
     var data = imagedata.data;
     return { r: data[ position ], g: data[ position + 1 ], b: data[ position + 2 ], a: data[ position + 3 ] };
 };
 
-//2D texture based 3 component 1D, 2D, 3D noise
-// vec3 noise(float p){return texture(iChannel0,vec2(p/iChannelResolution[0].x,.0)).xyz;}
-// vec3 noise(vec2 p){return texture(iChannel0,p/iChannelResolution[0].xy).xyz;}
-// vec3 noise(vec3 p){float m = mod(p.z,1.0);float s = p.z-m; float sprev = s-1.0;if (mod(s,2.0)==1.0) { s--; sprev++; m = 1.0-m; };return mix(texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(sprev).yz).xyz,texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(s).yz).xyz,m);}
-
-// vec3 noise(float p, float lod){return texture(iChannel0,vec2(p/iChannelResolution[0].x,.0),lod).xyz;}
-// vec3 noise(vec2 p, float lod){return texture(iChannel0,p/iChannelResolution[0].xy,lod).xyz;}
-// vec3 noise(vec3 p, float lod){float m = mod(p.z,1.0);float s = p.z-m; float sprev = s-1.0;if (mod(s,2.0)==1.0) { s--; sprev++; m = 1.0-m; };return mix(texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(sprev,lod).yz,lod).xyz,texture(iChannel0,p.xy/iChannelResolution[0].xy+noise(s,lod).yz,lod).xyz,m);}
-
-
-function noise(p)
+function smoothstep( edge0, edge1, x)
 {
-	//96x96 image
-	var u = p/96;
-	var v = p/96;
-	return getPixel( noiseData, u, v );
+	//scale, bias and saturate x to 0-1 range
+	x = Math.clamp((x-edge0)/(edge1-edge0), 0.0, 1.0);
+	//evaluate polynomial
+	return x*x*(3.0 - 2.0*x);
 }
 
-function createTerrain(scene)
+function mix( x, y, a)
+{
+	return x*(1.0-a) + y*a;
+}
+
+//2D texture based noise
+function noise( x )
+{
+    var p = THREE.Vector2( Math.floor(x.x), Math.floor(x.y) );
+    var f = THREE.Vector2( (x.x-Math.floor(x.x)), (x.y-Math.floor(x.y)) );
+	f.x = f.x*f.x*(3.0-2.0*f.x);
+	f.y = f.y*f.y*(3.0-2.0*f.y);
+
+    var u = p.x + 37.0*p.z + f.x;
+    var v = p.y + 17.0*f.z + f.y;
+
+	var rgy = getPixel( noiseData, (u + 0.5)/256.0, (v + 0.5)/256.0 ).y;
+	var rgx = getPixel( noiseData, (u + 0.5)/256.0, (v + 0.5)/256.0 ).x;
+
+	return mix( rg.x, rg.y, f.z );
+}
+
+function noise( x )
+{
+    var p = THREE.Vector2( Math.floor(x.x), Math.floor(x.y) );
+    var f = THREE.Vector2( (x.x-Math.floor(x.x)), (x.y-Math.floor(x.y)) );
+    var u = p.x + f.x*f.x*(3.0-2.0*f.x);
+    var v = p.y + f.y*f.y*(3.0-2.0*f.y);
+
+	var pixel = getPixel( noiseData, (u+118.4)/256.0 , (v+118.4)/256.0 );
+	return pixel.x;
+}
+
+function displacement( p )
+{
+	p.x = p.x + 1.0;
+	p.y = p.y + 0.0;
+	p.z = p.z + 0.8;
+
+	var m = new THREE.Matrix3( 0.00,  0.80,  0.60,
+                              -0.80,  0.36, -0.48,
+                              -0.60, -0.48,  0.64 );
+
+	var f = 0.5*noise( p ); 
+	p.applyMatrix3 ( m );
+	p.multiplyScalar ( 2.02 );
+
+	f = f + 0.25*noise( p ); 
+	p.applyMatrix3 ( m );
+	p.multiplyScalar ( 2.03 );
+	
+	f = f + 0.125*noise( p ); 
+	p.applyMatrix3 ( m );
+	p.multiplyScalar ( 2.01 );
+
+	f = f + 0.0625*noise( p ); 
+
+	var temp = new THREE.Vector3( p.x, p.y, p.z );
+	var n = noise( temp.multiplyScalar (3.5) );
+	f = f + 0.03*n*n;
+
+	return f;
+}
+
+function mapTerrain( pos )
+{
+	var temp1 = new THREE.Vector3( pos.x*0.8, pos.y*1.0, pos.z*0.8);
+	var edge0 = 1.0;
+	var edge1 = 3.0;
+	var temp2 = pos.y*0.1 + (displacement(temp1) - 0.4)*(1.0-smoothstep(edge0, edge1, pos.y));
+	return temp2;
+}
+
+function createTerrainold(scene)
 {
 	var texture;
 	texture = THREE.ImageUtils.loadTexture( "/images/noiseTextures/RGBANoiseMedium.png", THREE.UVMapping, function ( event ) {
@@ -1045,17 +1107,58 @@ function createTerrain(scene)
 
 	    var pXZ = new THREE.Vector2(p.x, p.z);
 	    var q = pXZ.length()*0.125;
-		var lod = -16.0;
 
 		var temp; 
-		temp = noise(p*.125,lod);
+		temp = noise(p*.125);
 		var nnn = new THREE.Vector3(temp.x, temp.y, temp.z);
-		// vec3 n1 =  p.y*.0125+nnn*8.0;
-		// vec3 n2 = p.y*.15+noise(p*.25+nnn.y,lod)*4.0;
-		// vec3 n3 = noise(p*vec3(1.0,0.5,1.0)+nnn.z,lod);
-		// float d = n1.x+n2.x+n3.x + noise(p.xz*4.10).x*.44*nnn.z;
+		var n1 = new THREE.Vector3( p.y*.0125+nnn.x*8.0,
+		 						    p.y*.0125+nnn.y*8.0,
+		 						    p.y*.0125+nnn.z*8.0 );
+
+
+		var n2 = new THREE.Vector3( p.y*.15+ noise(p*0.25+nnn.y)*4.0 );
+		var n2 = new THREE.Vector3( p.y*.15+noise(p*.25+nnn.y)*4.0 );
+		var temp1 = new THREE.Vector3( p, p*0.5, p );
+		var n3 = new THREE.Vector3( noise( temp1+nnn.z) );
+		var d = n1.x+n2.x+n3.x + noise3( pXZ*4.10).x*0.44*nnn.z;
 		// float density  = max(.0,pow(-p.y*.5,2.5)*.2)*(max(.0,pow(n1.y+nnn.z*.5+n2.y*.1,3.0)*.0000016)+.000025);
 		// return vec2(d,density*.3);
+	} );
+}
+
+function createTerrain(scene)
+{
+	var texture;
+	texture = THREE.ImageUtils.loadTexture( "/images/noiseTextures/RGBANoiseMedium.png", THREE.UVMapping, function ( event ) {
+
+	    noiseData = getImageData( texture.image );
+
+	    for(var i=0; i<levelLayers.length; i++)
+		{
+			var level = levelLayers[i];
+			for(var j=0; j<level.cellList.length; j++)
+			{
+				var cell = level.cellList[j];
+				var center = cell.center;
+				var w = cell.cellWidth;
+				var l = cell.cellLength;
+				var r = cell.radius;
+
+				for(var k=-w*0.5; k<w*0.5; k++)
+				{
+					for(var m=-l*0.5; m<l*0.5; m++)
+					{
+						//for every point
+			    		var p = new THREE.Vector3(0.0); //define point inside all slabs
+						var noiseDensity = mapTerrain( p );
+
+						//check if density is over some threshold and create voxel
+					}
+				}
+
+
+			}
+		}
 	} );
 }
 
@@ -1087,10 +1190,6 @@ function onUpdate(framework)
 		pathMat.camPos.y = framework.camera.position.y;
 		pathMat.camPos.z = framework.camera.position.z;
 	}
-	// if(pathMat.fogSwitch)
-	// {
-	// 	pathMat.fogSwitch = pathMat.fogSwitch;
-	// }
 }
 
 // when the scene is done initializing, it will call onLoad, then on frame updates, call onUpdate
