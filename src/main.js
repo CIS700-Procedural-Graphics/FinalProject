@@ -7,6 +7,7 @@ import Framework from './framework'
 import DAT from 'dat-gui'
 var OBJLoader = require('three-obj-loader');
 var textureLoader = new THREE.TextureLoader();
+import Player from './player'
 import Cell from './cell'
 import VoronoiPoint from './voronoiPoint'
 import Layer from './layer'
@@ -17,8 +18,6 @@ OBJLoader(THREE);
 //------------------------------------------------------------------------------
 
 var RAND = require('random-seed').create(Math.random());
-var SimplexNoise = require('simplex-noise');
-var simplex = new SimplexNoise(Math.random);
 var Pi = 3.14;
 
 //------------------------------------------------------------------------------
@@ -27,7 +26,7 @@ var generalParameters = {
   Collisions: false,
   Fog: false,
   FogDensity: 0.2,
-  voxelsize: 0.45
+  voxelsize: 0.25
 }
 
 var map2D = {
@@ -44,28 +43,30 @@ var level3D = {
   connectivity: 0.3
 }
 
-var floor_Material = new THREE.ShaderMaterial({
-  uniforms:
-  {
-  	image1: { // Check the Three.JS documentation for the different allowed types and values
-      type: "t",
-      value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/floor/ground1.jpg')
-    },
-    ambientLight:
-    {
-        type: "v3",
-        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
-    },
-    lightVec:
-    {
-        type: "v3",
-        value: new THREE.Vector3( 10, 20, 30 )
-    }
-  },
-  vertexShader: require('./shaders/lambert-withTexture-vert.glsl'),
-  fragmentShader: require('./shaders/lambert-withTexture-frag.glsl'),
-  side: THREE.DoubleSide
-});
+//material for slab below mountains
+var slabMat = new THREE.ShaderMaterial({
+	uniforms:
+	{
+		albedo:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 1.0, 0.98, 0.941 )
+	    },
+		ambientLight:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
+	    },
+	    lightVec:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 10, 20, 30 )
+	    }
+	},
+	vertexShader: require ('./shaders/slab-vert.glsl'),
+	fragmentShader: require ('./shaders/slab-frag.glsl'),
+	side: THREE.DoubleSide
+} );
 
 // material for instanced objects
 var pathMat = new THREE.RawShaderMaterial({
@@ -75,10 +76,6 @@ var pathMat = new THREE.RawShaderMaterial({
 	      type: "t",
 	      value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/path/TilingStone1.jpg')
 	    },
-	    // image2: { // Check the Three.JS documentation for the different allowed types and values
-	    //   type: "t",
-	    //   value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/path/stoneNormal.png')
-	    // },
 	    ambientLight:
 	    {
 	        type: "v3",
@@ -132,11 +129,6 @@ var grid = [];
 var connectingWalkways = []; //list of walkwaylayers connecting
 //grid indexing scheme: index = currIndy*gridsize*gridsize + currIndx*gridsize + currIndz;
 var gridsize = 20;
-
-//------------------------------------------------------------------------------
-
-var noiseData;
-var peakElevation = 0.0;
 
 //------------------------------------------------------------------------------
 
@@ -194,7 +186,6 @@ function setupLightsandSkybox(scene, camera, renderer)
 	directionalLight.position.set(1, 3, 2);
 	directionalLight.position.multiplyScalar(10);
 	scene.add(directionalLight);
-	floor_Material.lightVec = directionalLight.position;
 	pathMat.lightVec = directionalLight.position;
 
 	// set skybox
@@ -221,7 +212,7 @@ function onreset( scene )
 {
 	cleanscene(scene);
 	create3DMap(scene);
-	//createTerrain(scene);
+	createTerrain(scene);
 }
 
 function cleanscene(scene)
@@ -438,7 +429,7 @@ function spawn2DCells(scene, cellList, floorHeight)
 		{
 			count++;
 			var box_geo = new THREE.BoxGeometry( w*2.0, 1, l*2.0 );
-			var slab = new THREE.Mesh( box_geo, new THREE.MeshLambertMaterial() );
+			var slab = new THREE.Mesh( box_geo, slabMat );
 
 			var cent = new THREE.Vector3( centx, floorHeight, centz );
 
@@ -551,7 +542,7 @@ function createWalkWays(pathPoints, walkway, height)
   			var left = new THREE.Vector3(up.x, up.y, up.z).normalize();
   			left.cross(forward).normalize();
 
-  			for(var k=-w*0.5; k<=w*0.5; k++)
+  			for(var k=-w*0.5; k<=w*0.5; k=k+stepsize*1.1)
   			{
   				if( map2D.crumbleStatus > RAND.random() )
   				{
@@ -811,7 +802,7 @@ function createInterConnectingWalkWays(pathPoints, walkway)
   			var left = new THREE.Vector3(up.x, up.y, up.z).normalize();
   			left.cross(forward).normalize();
 
-  			for(var k=-w*0.5; k<=w*0.5; k++)
+  			for(var k=-w*0.5; k<=w*0.5; k=k+1.1*stepsize)
   			{
   				if( map2D.crumbleStatus > RAND.random() )
   				{
@@ -825,58 +816,6 @@ function createInterConnectingWalkWays(pathPoints, walkway)
   			}
   		}
   	}
-}
-
-function interLayerWalkwaysOld(walkway)
-{
-	var index = 0;
-	var verts = [];
-	//for every n randomly chosen slabs connect them to some other slab in the layer above it
-	for(var i=0; i<level3D.numberOfLayers-1; i++)
-	{
-		//for every layer
-		//pick an x number of slabs
-		var n = RAND.random()*5;
-
-		for(var j=0; j<n; j++)
-		{
-			var ind1 = Math.floor(RAND.random()*levelLayers[i].cellList.length);
-			var currCell = levelLayers[i].cellList[ind1];
-
-			//find current cell's position in grid
-			var currIndy = Math.floor(currCell.center.y/gridsize);
-			var currIndx = Math.floor(currCell.center.x/gridsize);
-			var currIndz = Math.floor(currCell.center.z/gridsize);
-
-			var connectableCells = [];
-			//search through the grid in nearby cells in some radius
-			//cells to the right and towards the camera; -- add thing for other way too
-			for(var k=currIndx+2; k<Math.min((currIndx+6), gridsize); k++)
-			{
-				for(var m=currIndz+2; m<Math.min((currIndz+6), gridsize); m++)
-				{
-					//create a list of those cells
-					index = currIndy*gridsize*gridsize + currIndx*gridsize + currIndz;
-					// debugger;
-					for(var a=0; a<grid[index].slabs.length; a++)
-					{
-						// debugger;
-						connectableCells.push(grid[index].slabs[a]);
-					}
-				}
-			}
-			
-			//pick a random cell from that list and connect the original cell to the chosen cell 
-			var ind2 = Math.floor(RAND.random()*connectableCells.length);
-			var toCell = connectableCells[ind2];
-
-			verts.push(currCell.center);
-			verts.push(toCell.center);
-		}
-	}
-
-	var height = (currCell.center.y + toCell.center.y)*0.5;
-	createInterConnectingWalkWays(verts, walkway);
 }
 
 function interLayerWalkways(walkway)
@@ -1144,114 +1083,6 @@ function setVoxels(roomMesh, roomVoxels, voxelColors)
 
 //------------------------------------------------------------------------------
 
-function biome(elevation)
-{
-	var LAND = new THREE.Vector3(178/255, 79/255, 30/255);
-	var WATER = new THREE.Vector3(0/255, 104/255, 216/255);
-	var BEACH = new THREE.Vector3(178/255, 79/255, 30/255);
-	var FOREST = new THREE.Vector3(178/255, 79/255, 30/255);
-	var JUNGLE = new THREE.Vector3(8/255, 114/255, 38/255);
-	var TUNDRA = new THREE.Vector3(158/255, 226/255, 178/255);
-	var SNOW = new THREE.Vector3(249/255, 249/255, 249/255);
-
-	var e = elevation/2.0;//peakElevation;
-
-	if (e < 0.3) return WATER;
-	else if (e < 0.4) return BEACH;
-	else if (e < 0.55) return LAND;
-	else if (e < 0.7) return FOREST;
-	else if (e < 0.9) return TUNDRA
-	return SNOW
-}
-
-function noise( p, center )
-{
-	var frequency = 1.0;
-	var power = 1.0;
-	var sum =0.0;
-	var peak_power = 2.25; //limit from 0.6 to 2.5
-	var elevation;
-
-	var dist = center.distanceTo(p);
-	peak_power = (1.0/dist);
-	// console.log(peak_power);
-	//multi octave noise
-	for(var i =0; i<4; i++)
-	{
-		sum = sum + power*(simplex.noise2D(frequency*p.x, frequency*p.z)/2.0 + 0.5);
-		frequency = 2.0*frequency;
-		power = power*0.5;		
-	}
-
-	if(sum<=0.0)
-	{
-		elevation = 0.0;
-	}
-	else
-	{
-		elevation = Math.pow(sum, peak_power);
-	}
-
-	peakElevation = Math.max(elevation, peakElevation);
-	return elevation;
-}
-
-//use this function if you want block versions of the noise that is implemented on the shader
-function createTerrainBlocks(scene)
-{
-    for(var i=0; i<levelLayers.length; i++)
-	{
-		var level = levelLayers[i];
-		for(var j=0; j<level.cellList.length; j++)
-		{
-			var cell = level.cellList[j];
-			var center = cell.center;
-			var w = cell.cellWidth;
-			var l = cell.cellLength;
-			var h = 10;
-			var r = cell.radius;
-
-			var geo = new THREE.InstancedBufferGeometry();
-
-			var mat = new THREE.RawShaderMaterial({
-				vertexShader: require ('./shaders/roomVoxel-vert.glsl') ,
-				fragmentShader: require ('./shaders/roomVoxel-frag.glsl'),
-				side: THREE.DoubleSide,
-				transparent: false
-			} );
-
-			cell.roomVoxelsMesh = initRoomGeo(scene, geo, mat);
-
-			for(var k=-(w-1.0); k<=(w-1.0); k=k+0.25)
-			{
-				for(var m=-(l-1.0); m<=(l-1.0); m=m+0.25)
-				{
-					//for every point
-		    		var pos = new THREE.Vector3(center.x, center.y, center.z);
-		    		pos.x = pos.x + k;//define point inside all slabs
-		    		pos.z = pos.z + m;
-		    		pos.y = pos.y + 1.0;
-
-					var height = noise(pos, center);
-					
-					for(var n=0; n<height; n=n+0.25)
-					{
-						var p = new THREE.Vector3(pos.x, pos.y+n, pos.z);
-						cell.roomVoxels.push(p);
-						var _color = biome(n);
-						var color = new THREE.Vector3( _color.x, _color.y, _color.z );
-						// var color = new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() );
-						cell.voxelColors.push(color);
-					}
-				}
-			}
-
-			setVoxels(cell.roomVoxelsMesh, cell.roomVoxels, cell.voxelColors);
-			scene.add(cell.roomVoxelsMesh);
-		}
-	}
-}
-
 function createTerrain(scene)
 {
     for(var i=0; i<levelLayers.length; i++)
@@ -1280,8 +1111,8 @@ function createTerrain(scene)
 				        value: new THREE.Vector3( 10, 20, 30 )
 				    }
 				},
-				vertexShader: require ('./shaders/lambert-withTexture-vert.glsl') ,
-				fragmentShader: require ('./shaders/lambert-withTexture-frag.glsl'),
+				vertexShader: require ('./shaders/terrain-vert.glsl') ,
+				fragmentShader: require ('./shaders/terrain-frag.glsl'),
 				side: THREE.DoubleSide,
 				transparent: false
 			} );
@@ -1290,7 +1121,7 @@ function createTerrain(scene)
 			plane_geo.rotateX(0.5*Pi);
 
 			cell.mountain = new THREE.Mesh(plane_geo, mat);
-			cell.mountain.position.set(center.x, center.y+0.45, center.z);
+			cell.mountain.position.set(center.x, center.y+0.5, center.z);
 			scene.add(cell.mountain);
 		}
 	}
