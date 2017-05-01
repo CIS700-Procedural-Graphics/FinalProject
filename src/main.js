@@ -1,5 +1,6 @@
 //skybox images from: https://github.com/simianarmy/webgl-skybox/tree/master/images
-//noise function by inigo quilez: https://www.shadertoy.com/view/XsX3RB
+//simplex noise function: https://www.npmjs.com/package/simplex-noise
+//terrain noise: http://www.redblobgames.com/maps/terrain-from-noise/
 
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about this much
 import Framework from './framework'
@@ -16,6 +17,8 @@ OBJLoader(THREE);
 //------------------------------------------------------------------------------
 
 var RAND = require('random-seed').create(Math.random());
+var SimplexNoise = require('simplex-noise');
+var simplex = new SimplexNoise(Math.random);
 var Pi = 3.14;
 
 //------------------------------------------------------------------------------
@@ -23,7 +26,7 @@ var Pi = 3.14;
 var generalParameters = {
   Collisions: false,
   Fog: false,
-  FogDensity: 0.02,
+  FogDensity: 0.2,
   voxelsize: 0.45
 }
 
@@ -56,11 +59,12 @@ var floor_Material = new THREE.ShaderMaterial({
     lightVec:
     {
         type: "v3",
-        value: new THREE.Vector3( 10, 10, 10 )
+        value: new THREE.Vector3( 10, 20, 30 )
     }
   },
   vertexShader: require('./shaders/lambert-withTexture-vert.glsl'),
-  fragmentShader: require('./shaders/lambert-withTexture-frag.glsl')
+  fragmentShader: require('./shaders/lambert-withTexture-frag.glsl'),
+  side: THREE.DoubleSide
 });
 
 // material for instanced objects
@@ -92,7 +96,7 @@ var pathMat = new THREE.RawShaderMaterial({
 	    },
 	    fogSwitch:
 	    {
-	        type: "i",
+	        type: "f",
 	        value: 0
 	    },
 	    fogColor:
@@ -132,6 +136,7 @@ var gridsize = 20;
 //------------------------------------------------------------------------------
 
 var noiseData;
+var peakElevation = 0.0;
 
 //------------------------------------------------------------------------------
 
@@ -159,13 +164,13 @@ function changeGUI(gui, camera, scene)
 		map2D.crumbleStatus = 0.3 + 0.5*map2D.crumbleStatus;
 	});
 
-	// var fog = tweaks.addFolder('Fog');
-	// fog.add(generalParameters, 'Fog').onChange(function(newVal) {
-	// 	pathMat.fogSwitch = (pathMat.fogSwitch + 1)%2;
-	// });
-	// fog.add(generalParameters, 'FogDensity', 0.01, 0.1).onChange(function(newVal) {
-	// 	pathMat.fogDensity = newVal;
-	// });
+	var fog = tweaks.addFolder('Fog');
+	fog.add(generalParameters, 'Fog').onChange(function(newVal) {
+		pathMat.uniforms.fogSwitch.value = newVal;
+	});
+	fog.add(generalParameters, 'FogDensity', 0.01, 0.1).onChange(function(newVal) {
+		pathMat.uniforms.fogDensity = Number(newVal);
+	});
 
 	gui.add(generalParameters, 'Collisions').onChange(function(newVal) {});
 
@@ -203,7 +208,8 @@ function setupLightsandSkybox(scene, camera, renderer)
 	// scene.background = skymap;
 
 	// renderer.setClearColor( 0xbfd1e5 );
-	renderer.setClearColor( 0x7f7f7f );
+	// renderer.setClearColor( 0x7f7f7f );
+	renderer.setClearColor( 0x000000 );
 	scene.add(new THREE.AxisHelper(20));
 
 	// set camera position
@@ -215,7 +221,7 @@ function onreset( scene )
 {
 	cleanscene(scene);
 	create3DMap(scene);
-	createTerrain(scene);
+	//createTerrain(scene);
 }
 
 function cleanscene(scene)
@@ -419,8 +425,8 @@ function spawn2DCells(scene, cellList, floorHeight)
 
 		var flag_create = true;
 
-		var centx = RAND.random()*150;
-		var centz = RAND.random()*150;
+		var centx = RAND.random()*100;
+		var centz = RAND.random()*100;
 
 		var w = (map2D.roomSizeMin + RAND.random()*(map2D.roomSizeMax-map2D.roomSizeMin))*roomscale ;
 		var l = (map2D.roomSizeMin + RAND.random()*(map2D.roomSizeMax-map2D.roomSizeMin))*roomscale ;
@@ -431,18 +437,18 @@ function spawn2DCells(scene, cellList, floorHeight)
 		if( flag_create )
 		{
 			count++;
-			var box_geo = new THREE.BoxGeometry( w*2.0, 1, l*2.0 );		
-			var slab = new THREE.Mesh( box_geo, floor_Material );
+			var box_geo = new THREE.BoxGeometry( w*2.0, 1, l*2.0 );
+			var slab = new THREE.Mesh( box_geo, new THREE.MeshLambertMaterial() );
 
 			var cent = new THREE.Vector3( centx, floorHeight, centz );
 
 			var cell = new Cell("undetermined", cent, w, l, slab);
 			cellList.push(cell);      
 			cellList[cellList.length-1].drawCell(scene);
-			// console.log("cell pos", centx, floorHeight, centz);
 		}
-
 	}
+
+	//To display the number of cells created and drawn per layer, uncomment below
 	// console.log("number of cells: " + map2D.numberOfCells);
 	// console.log("number of cells drawn: " + cellList.length);
 }
@@ -966,7 +972,7 @@ function create3DMap(scene)
 			transparent: false
 		} );
 
-		layer.instancedWalkway = initwalkwayGeo(scene,  geo, mat);
+		layer.instancedWalkway = initwalkwayGeo(scene, geo, mat);
 		setWalkWayVoxels(layer.instancedWalkway, layer.walkway);
 
 		//add walkway to scene
@@ -995,171 +1001,299 @@ function create3DMap(scene)
 
 //------------------------------------------------------------------------------
 
-function getImageData( image ) 
+function initRoomGeo(scene, roomGeo, roomMat)
 {
-    var canvas = document.createElement( 'canvas' );
-    canvas.width = image.width; //<--- error here
-    canvas.height = image.height;
+	//define and set attributes of the instanced walkway
+	// geometry
+	var instances = 65000;
+	// per mesh data
+	var vertices = new THREE.BufferAttribute( new Float32Array( [
+		// Front
+		-1, 1, 1,
+		1, 1, 1,
+		-1, -1, 1,
+		1, -1, 1,
+		// Back
+		1, 1, -1,
+		-1, 1, -1,
+		1, -1, -1,
+		-1, -1, -1,
+		// Left
+		-1, 1, -1,
+		-1, 1, 1,
+		-1, -1, -1,
+		-1, -1, 1,
+		// Right
+		1, 1, 1,
+		1, 1, -1,
+		1, -1, 1,
+		1, -1, -1,
+		// Top
+		-1, 1, 1,
+		1, 1, 1,
+		-1, 1, -1,
+		1, 1, -1,
+		// Bottom
+		1, -1, 1,
+		-1, -1, 1,
+		1, -1, -1,
+		-1, -1, -1
+	] ), 3 );
+	roomGeo.addAttribute( 'position', vertices );
+	var uvs = new THREE.BufferAttribute( new Float32Array( [
+				//x	y	z
+				// Front
+				0, 0,
+				1, 0,
+				0, 1,
+				1, 1,
+				// Back
+				1, 0,
+				0, 0,
+				1, 1,
+				0, 1,
+				// Left
+				1, 1,
+				1, 0,
+				0, 1,
+				0, 0,
+				// Right
+				1, 0,
+				1, 1,
+				0, 0,
+				0, 1,
+				// Top
+				0, 0,
+				1, 0,
+				0, 1,
+				1, 1,
+				// Bottom
+				1, 0,
+				0, 0,
+				1, 1,
+				0, 1
+	] ), 2 );
+	roomGeo.addAttribute( 'uv', uvs );
+	var indices = new Uint16Array( [
+		0, 1, 2,
+		2, 1, 3,
+		4, 5, 6,
+		6, 5, 7,
+		8, 9, 10,
+		10, 9, 11,
+		12, 13, 14,
+		14, 13, 15,
+		16, 17, 18,
+		18, 17, 19,
+		20, 21, 22,
+		22, 21, 23
+	] );
+	roomGeo.setIndex( new THREE.BufferAttribute( indices, 1 ) );
 
-    var context = canvas.getContext( '2d' );
-    context.drawImage( image, 0, 0 );
+	//giving it random positions; -- change later with actual positions
+	// per instance data
+	var offsets = new THREE.InstancedBufferAttribute( new Float32Array( instances * 3 ), 3, 1 );
+	// var vector = new THREE.Vector4();
+	for ( var i = 0, ul = offsets.count; i < ul; i++ ) 
+	{
+		var x = Math.random() * 100 - 50;
+		var y = Math.random() * 100 - 50;
+		var z = Math.random() * 100 - 50;
+		// vector.set( x, y, z, 0 );
+		// move out at least 5 units from center in current direction
+		offsets.setXYZ( i, x + x * 5, y + y * 5, z + z * 5 );
+	}
+	roomGeo.addAttribute( 'offset', offsets ); // per mesh translation
 
-    return context.getImageData( 0, 0, image.width, image.height );
-};
+	//giving it random values; -- change later with actual positions
+	// per instance data
+	var voxelColors = new THREE.InstancedBufferAttribute( new Float32Array( instances * 3 ), 3, 1 );
+	for ( var i = 0, ul = offsets.count; i < ul; i++ ) 
+	{
+		var x = Math.random();
+		var y = Math.random();
+		var z = Math.random();
+		voxelColors.setXYZ( i, x, y, z );
+	}
+	roomGeo.addAttribute( 'color', voxelColors ); // per mesh translation
 
-function getPixel( imagedata, x, y ) 
-{
-    var position = ( x + imagedata.width * y ) * 4; 
-    var data = imagedata.data;
-    return { r: data[ position ], g: data[ position + 1 ], b: data[ position + 2 ], a: data[ position + 3 ] };
-};
+	//scale cubes that form walkway
+	roomGeo.scale ( generalParameters.voxelsize/4.0, generalParameters.voxelsize/4.0, generalParameters.voxelsize/4.0 );
 
-function smoothstep( edge0, edge1, x)
-{
-	//scale, bias and saturate x to 0-1 range
-	x = Math.clamp((x-edge0)/(edge1-edge0), 0.0, 1.0);
-	//evaluate polynomial
-	return x*x*(3.0 - 2.0*x);
+	//creating bounding sphere
+	var boundingSphereCenter = new THREE.Vector3(0,0,0);
+	var boundingSphereRadius = 300;
+	roomGeo.boundingSphere = new THREE.Sphere(boundingSphereCenter, boundingSphereRadius);
+
+	//create mesh
+	return new THREE.Mesh( roomGeo, roomMat );
 }
 
-function mix( x, y, a)
+function setVoxels(roomMesh, roomVoxels, voxelColors)
 {
-	return x*(1.0-a) + y*a;
+	var offsets = roomMesh.geometry.getAttribute("offset");
+	var colors = roomMesh.geometry.getAttribute("color");
+	roomMesh.geometry.maxInstancedCount = roomVoxels.length;
+
+	for ( var i = 0; i < roomVoxels.length; i++ ) 
+	{
+		offsets.setXYZ(i, roomVoxels[i].x, roomVoxels[i].y, roomVoxels[i].z);
+		colors.setXYZ(i, voxelColors[i].x, voxelColors[i].y, voxelColors[i].z);
+	}
 }
 
-//2D texture based noise
-function noise( x )
+//------------------------------------------------------------------------------
+
+function biome(elevation)
 {
-    var p = THREE.Vector2( Math.floor(x.x), Math.floor(x.y) );
-    var f = THREE.Vector2( (x.x-Math.floor(x.x)), (x.y-Math.floor(x.y)) );
-	f.x = f.x*f.x*(3.0-2.0*f.x);
-	f.y = f.y*f.y*(3.0-2.0*f.y);
+	var LAND = new THREE.Vector3(178/255, 79/255, 30/255);
+	var WATER = new THREE.Vector3(0/255, 104/255, 216/255);
+	var BEACH = new THREE.Vector3(178/255, 79/255, 30/255);
+	var FOREST = new THREE.Vector3(178/255, 79/255, 30/255);
+	var JUNGLE = new THREE.Vector3(8/255, 114/255, 38/255);
+	var TUNDRA = new THREE.Vector3(158/255, 226/255, 178/255);
+	var SNOW = new THREE.Vector3(249/255, 249/255, 249/255);
 
-    var u = p.x + 37.0*p.z + f.x;
-    var v = p.y + 17.0*f.z + f.y;
+	var e = elevation/2.0;//peakElevation;
 
-	var rgy = getPixel( noiseData, (u + 0.5)/256.0, (v + 0.5)/256.0 ).y;
-	var rgx = getPixel( noiseData, (u + 0.5)/256.0, (v + 0.5)/256.0 ).x;
-
-	return mix( rg.x, rg.y, f.z );
+	if (e < 0.3) return WATER;
+	else if (e < 0.4) return BEACH;
+	else if (e < 0.55) return LAND;
+	else if (e < 0.7) return FOREST;
+	else if (e < 0.9) return TUNDRA
+	return SNOW
 }
 
-function noise( x )
+function noise( p, center )
 {
-    var p = THREE.Vector2( Math.floor(x.x), Math.floor(x.y) );
-    var f = THREE.Vector2( (x.x-Math.floor(x.x)), (x.y-Math.floor(x.y)) );
-    var u = p.x + f.x*f.x*(3.0-2.0*f.x);
-    var v = p.y + f.y*f.y*(3.0-2.0*f.y);
+	var frequency = 1.0;
+	var power = 1.0;
+	var sum =0.0;
+	var peak_power = 2.25; //limit from 0.6 to 2.5
+	var elevation;
 
-	var pixel = getPixel( noiseData, (u+118.4)/256.0 , (v+118.4)/256.0 );
-	return pixel.x;
+	var dist = center.distanceTo(p);
+	peak_power = (1.0/dist);
+	// console.log(peak_power);
+	//multi octave noise
+	for(var i =0; i<4; i++)
+	{
+		sum = sum + power*(simplex.noise2D(frequency*p.x, frequency*p.z)/2.0 + 0.5);
+		frequency = 2.0*frequency;
+		power = power*0.5;		
+	}
+
+	if(sum<=0.0)
+	{
+		elevation = 0.0;
+	}
+	else
+	{
+		elevation = Math.pow(sum, peak_power);
+	}
+
+	peakElevation = Math.max(elevation, peakElevation);
+	return elevation;
 }
 
-function displacement( p )
+//use this function if you want block versions of the noise that is implemented on the shader
+function createTerrainBlocks(scene)
 {
-	p.x = p.x + 1.0;
-	p.y = p.y + 0.0;
-	p.z = p.z + 0.8;
+    for(var i=0; i<levelLayers.length; i++)
+	{
+		var level = levelLayers[i];
+		for(var j=0; j<level.cellList.length; j++)
+		{
+			var cell = level.cellList[j];
+			var center = cell.center;
+			var w = cell.cellWidth;
+			var l = cell.cellLength;
+			var h = 10;
+			var r = cell.radius;
 
-	var m = new THREE.Matrix3( 0.00,  0.80,  0.60,
-                              -0.80,  0.36, -0.48,
-                              -0.60, -0.48,  0.64 );
+			var geo = new THREE.InstancedBufferGeometry();
 
-	var f = 0.5*noise( p ); 
-	p.applyMatrix3 ( m );
-	p.multiplyScalar ( 2.02 );
+			var mat = new THREE.RawShaderMaterial({
+				vertexShader: require ('./shaders/roomVoxel-vert.glsl') ,
+				fragmentShader: require ('./shaders/roomVoxel-frag.glsl'),
+				side: THREE.DoubleSide,
+				transparent: false
+			} );
 
-	f = f + 0.25*noise( p ); 
-	p.applyMatrix3 ( m );
-	p.multiplyScalar ( 2.03 );
-	
-	f = f + 0.125*noise( p ); 
-	p.applyMatrix3 ( m );
-	p.multiplyScalar ( 2.01 );
+			cell.roomVoxelsMesh = initRoomGeo(scene, geo, mat);
 
-	f = f + 0.0625*noise( p ); 
+			for(var k=-(w-1.0); k<=(w-1.0); k=k+0.25)
+			{
+				for(var m=-(l-1.0); m<=(l-1.0); m=m+0.25)
+				{
+					//for every point
+		    		var pos = new THREE.Vector3(center.x, center.y, center.z);
+		    		pos.x = pos.x + k;//define point inside all slabs
+		    		pos.z = pos.z + m;
+		    		pos.y = pos.y + 1.0;
 
-	var temp = new THREE.Vector3( p.x, p.y, p.z );
-	var n = noise( temp.multiplyScalar (3.5) );
-	f = f + 0.03*n*n;
+					var height = noise(pos, center);
+					
+					for(var n=0; n<height; n=n+0.25)
+					{
+						var p = new THREE.Vector3(pos.x, pos.y+n, pos.z);
+						cell.roomVoxels.push(p);
+						var _color = biome(n);
+						var color = new THREE.Vector3( _color.x, _color.y, _color.z );
+						// var color = new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() );
+						cell.voxelColors.push(color);
+					}
+				}
+			}
 
-	return f;
-}
-
-function mapTerrain( pos )
-{
-	var temp1 = new THREE.Vector3( pos.x*0.8, pos.y*1.0, pos.z*0.8);
-	var edge0 = 1.0;
-	var edge1 = 3.0;
-	var temp2 = pos.y*0.1 + (displacement(temp1) - 0.4)*(1.0-smoothstep(edge0, edge1, pos.y));
-	return temp2;
-}
-
-function createTerrainold(scene)
-{
-	var texture;
-	texture = THREE.ImageUtils.loadTexture( "/images/noiseTextures/RGBANoiseMedium.png", THREE.UVMapping, function ( event ) {
-
-	    noiseData = getImageData( texture.image );
-
-	    //for every point
-	    var p = new THREE.Vector3(0.0); //define point inside all slabs
-
-	    var pXZ = new THREE.Vector2(p.x, p.z);
-	    var q = pXZ.length()*0.125;
-
-		var temp; 
-		temp = noise(p*.125);
-		var nnn = new THREE.Vector3(temp.x, temp.y, temp.z);
-		var n1 = new THREE.Vector3( p.y*.0125+nnn.x*8.0,
-		 						    p.y*.0125+nnn.y*8.0,
-		 						    p.y*.0125+nnn.z*8.0 );
-
-
-		var n2 = new THREE.Vector3( p.y*.15+ noise(p*0.25+nnn.y)*4.0 );
-		var n2 = new THREE.Vector3( p.y*.15+noise(p*.25+nnn.y)*4.0 );
-		var temp1 = new THREE.Vector3( p, p*0.5, p );
-		var n3 = new THREE.Vector3( noise( temp1+nnn.z) );
-		var d = n1.x+n2.x+n3.x + noise3( pXZ*4.10).x*0.44*nnn.z;
-		// float density  = max(.0,pow(-p.y*.5,2.5)*.2)*(max(.0,pow(n1.y+nnn.z*.5+n2.y*.1,3.0)*.0000016)+.000025);
-		// return vec2(d,density*.3);
-	} );
+			setVoxels(cell.roomVoxelsMesh, cell.roomVoxels, cell.voxelColors);
+			scene.add(cell.roomVoxelsMesh);
+		}
+	}
 }
 
 function createTerrain(scene)
 {
-	var texture;
-	texture = THREE.ImageUtils.loadTexture( "/images/noiseTextures/RGBANoiseMedium.png", THREE.UVMapping, function ( event ) {
-
-	    noiseData = getImageData( texture.image );
-
-	    for(var i=0; i<levelLayers.length; i++)
+    for(var i=0; i<levelLayers.length; i++)
+	{
+		var level = levelLayers[i];
+		for(var j=0; j<level.cellList.length; j++)
 		{
-			var level = levelLayers[i];
-			for(var j=0; j<level.cellList.length; j++)
-			{
-				var cell = level.cellList[j];
-				var center = cell.center;
-				var w = cell.cellWidth;
-				var l = cell.cellLength;
-				var r = cell.radius;
+			var cell = level.cellList[j];
+			var center = cell.center;
+			var w = cell.cellWidth;
+			var l = cell.cellLength;
+			var h = 10;
+			var r = cell.radius;
 
-				for(var k=-w*0.5; k<w*0.5; k++)
-				{
-					for(var m=-l*0.5; m<l*0.5; m++)
-					{
-						//for every point
-			    		var p = new THREE.Vector3(0.0); //define point inside all slabs
-						var noiseDensity = mapTerrain( p );
+			var mat = new THREE.ShaderMaterial({
+				uniforms:
+  				{
+					ambientLight:
+				    {
+				        type: "v3",
+				        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
+				    },
+				    lightVec:
+				    {
+				        type: "v3",
+				        value: new THREE.Vector3( 10, 20, 30 )
+				    }
+				},
+				vertexShader: require ('./shaders/lambert-withTexture-vert.glsl') ,
+				fragmentShader: require ('./shaders/lambert-withTexture-frag.glsl'),
+				side: THREE.DoubleSide,
+				transparent: false
+			} );
 
-						//check if density is over some threshold and create voxel
-					}
-				}
+			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 50, 50 );
+			plane_geo.rotateX(0.5*Pi);
 
-
-			}
+			cell.mountain = new THREE.Mesh(plane_geo, mat);
+			cell.mountain.position.set(center.x, center.y+0.45, center.z);
+			scene.add(cell.mountain);
 		}
-	} );
+	}
 }
 
 //------------------------------------------------------------------------------

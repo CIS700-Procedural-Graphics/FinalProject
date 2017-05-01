@@ -9,7 +9,7 @@ uniform sampler2D image2;
 uniform vec3 ambientLight;
 uniform vec3 light_position;
 
-uniform int fogSwitch;
+uniform float fogSwitch;
 uniform vec3 eye_position;
 uniform vec3 fogColor;
 uniform float fogDensity;
@@ -26,7 +26,7 @@ void main()
 
     vec3 finalColor = vec3(0.0);
 
-    if(fogSwitch == 0)
+    if(fogSwitch == 0.0)
     {
     	finalColor = ambientLight + texColor.rgb;
     }
@@ -55,7 +55,7 @@ void main()
     }
 
 
-    //finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*texColor.rgb;
+    // finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*texColor.rgb;
 
 
 
