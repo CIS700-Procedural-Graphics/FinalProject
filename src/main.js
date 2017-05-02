@@ -28,7 +28,7 @@ var generalParameters = {
   FogDensity: 0.1,
   fog_Col: new THREE.Color(0xd5ddea),
   voxelsize: 0.25,
-  maxInstanceCount: 65000
+  maxInstanceCount: 200000
 }
 
 // var fogParameters = {
@@ -40,13 +40,13 @@ var map2D = {
   connectivity: 0.3,
   roomSizeMin: 2.0, //controls min of width and length of rooms
   roomSizeMax: 3.0, //controls max of width and length of rooms
-  walkWayWidth: 4.0,
+  walkWayWidth: 2.5,
   crumbleStatus: 0.5
 }
 
 var level3D = {
   numberOfLayers: 2,
-  connectivity: 0.3
+  connectivity: 0.35
 }
 
 //material for slab below mountains
@@ -179,7 +179,7 @@ function changeGUI(gui, camera, scene, renderer)
 	map2DFolder.add(map2D, 'roomSizeMax', 1.1, 5.0).onChange(function(newVal) {});
 	map2DFolder.add(map2D, 'connectivity', 0.1, 0.9).onChange(function(newVal) {});
 	map2DFolder.add(map2D, 'walkWayWidth', 2.0, 6.0).onChange(function(newVal) {});
-	map2DFolder.add(map2D, 'crumbleStatus', 0.15, 0.85).onChange(function(newVal) {
+	map2DFolder.add(map2D, 'crumbleStatus', 0.35, 0.9).onChange(function(newVal) {
 		map2D.crumbleStatus = map2D.crumbleStatus;
 	});
 
@@ -256,9 +256,6 @@ function changeGUI(gui, camera, scene, renderer)
 
 function setupLightsandSkybox(scene, camera, renderer)
 {
-	// scene.fog = new THREE.Fog(0xffffff, 1, 60);
-	// scene.fog.color.setHSL( 0.0, 0.0, 0.0 );
-
 	// Set light
 	directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
 	directionalLight.color.setHSL(0.1, 1, 0.95);
@@ -266,18 +263,6 @@ function setupLightsandSkybox(scene, camera, renderer)
 	directionalLight.position.multiplyScalar(10);
 	scene.add(directionalLight);
 
-	// set skybox
-	var loader = new THREE.CubeTextureLoader();
-	var urlPrefix = 'images/skymap/';
-	var skymap = new THREE.CubeTextureLoader().load([
-	  urlPrefix + 'px.jpg', urlPrefix + 'nx.jpg',
-	  urlPrefix + 'py.jpg', urlPrefix + 'ny.jpg',
-	  urlPrefix + 'pz.jpg', urlPrefix + 'nz.jpg'
-	] );
-	// scene.background = skymap;
-
-	// renderer.setClearColor( 0xbfd1e5 );
-	// renderer.setClearColor( 0x7f7f7f );
 	renderer.setClearColor( 0x000000 );
 	// scene.add(new THREE.AxisHelper(20));
 
@@ -873,6 +858,70 @@ function removeRandomPaths(verts)
 	}
 }
 
+function f_equals(a, b, epsilon)
+{
+	if( (a>(b-epsilon)) && (a<(b+epsilon)) )
+	{
+		return true;
+	}
+	return false;
+}
+
+function removeIntersectingPaths(linePoints)
+{
+	//reseource: https://math.stackexchange.com/questions/28503/how-to-find-intersection-of-two-lines-in-3d
+	for(var i=0; i<linePoints.length; i=i+2)
+	{
+		//convert lines to parametric form
+		var A = new THREE.Vector3(linePoints[i].x, linePoints[i].y, linePoints[i].z);
+		var B = new THREE.Vector3(linePoints[i+1].x, linePoints[i+1].y, linePoints[i+1].z);
+
+		for(var j=0; j<linePoints.length; j+=2)
+    	{
+    		if(i==j)
+    		{
+    			continue;
+    		}
+
+    		var C = new THREE.Vector3(linePoints[j].x, linePoints[j].y, linePoints[j].z);
+			var D = new THREE.Vector3(linePoints[j+1].x, linePoints[j+1].y, linePoints[j+1].z);
+
+			var s_numerator = ((A.y-C.y)*(B.x-A.x)) + ((C.x-A.x)*(B.y-A.y));
+			var s_denominator = ((B.x-A.x)*(D.y-C.y)) - ((D.x-C.x)*(B.y-A.y));
+			
+			if(f_equals(s_denominator,0.0, 0.001))
+			{
+				//lines don't intersect
+				continue;
+			}
+
+			var s = s_numerator/s_denominator;
+
+			var t_numerator = (C.x-A.x) + s*(D.x-C.x);
+			var t_denominator = B.x-A.x;
+
+			if(f_equals(t_denominator,0.0, 0.001))
+			{
+				//lines don't intersect
+				continue;
+			}
+
+			var t = t_numerator/t_denominator;
+
+			var eq1 = A.z + t*(B.z-A.z);
+			var eq2 = C.z + s*(D.z-C.z);
+
+			if(f_equals(eq1,eq2, 0.00001))
+			{
+				//lines do intersect, so remove one of the lines
+				linePoints.splice(j,2);
+				j -= 2;
+				console.log("removed lines");
+			}
+    	}
+	}
+}
+
 function createInterConnectingWalkWays(pathPoints, walkway)
 {
 	//draw planes instead of line segments that represent walk ways
@@ -941,7 +990,14 @@ function interLayerWalkways(walkway)
 	{
 		//for every layer
 		//pick an x number of slabs
-		var n = 5+RAND.random()*5;//level3D.numberOfLayers*map2D.numberOfCells;
+		var minWalkways = 2 + map2D.numberOfCells*0.1;
+		var maxWalkways = 10;
+		var n = minWalkways+RAND.random()*(minWalkways-1.8);//level3D.numberOfLayers*map2D.numberOfCells;
+
+		if( n>maxWalkways )
+		{
+			n = maxWalkways;
+		}
 
 		for(var j=0; j<n; j++)
 		{
@@ -989,6 +1045,7 @@ function interLayerWalkways(walkway)
 	}
 
 	removeRandomPaths(verts);
+	removeIntersectingPaths(verts);
 	createInterConnectingWalkWays(verts, walkway);
 }
 
