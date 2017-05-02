@@ -41,7 +41,8 @@ var map2D = {
   roomSizeMin: 2.0, //controls min of width and length of rooms
   roomSizeMax: 3.0, //controls max of width and length of rooms
   walkWayWidth: 2.5,
-  crumbleStatus: 0.5
+  crumbleStatus: 0.5,
+  numslots: 3
 }
 
 var level3D = {
@@ -152,10 +153,10 @@ var pathMat = new THREE.RawShaderMaterial({
 
 var directionalLight;
 var levelLayers = [];//list of 2D Layers
-var grid = [];
+var grid = new Uint8Array(17600000); //could be more efficient if it was a array of bits
 var connectingWalkways = []; //list of walkwaylayers connecting
 //grid indexing scheme: index = currIndy*gridsize*gridsize + currIndx*gridsize + currIndz;
-var gridsize = 20;
+var gridsize = new THREE.Vector3(200, 440, 200); //max dimensions of scene
 
 //------------------------------------------------------------------------------
 
@@ -274,6 +275,7 @@ function setupLightsandSkybox(scene, camera, renderer)
 function onreset( scene )
 {
 	cleanscene(scene);
+	initgrid();
 	create3DMap(scene);
 	createTerrain(scene);
 	setMaterialValues();
@@ -533,6 +535,7 @@ function spawn2DCells(scene, cellList, floorHeight)
 			var cent = new THREE.Vector3( centx, floorHeight, centz );
 
 			var cell = new Cell("undetermined", cent, w, l, slab);
+			// cell.emptyslots(map2D.numslots);
 			cellList.push(cell);      
 			cellList[cellList.length-1].drawCell(scene);
 		}
@@ -650,6 +653,10 @@ function createWalkWays(pathPoints, walkway, height)
 					perpPos.x += temp.x*k;
 					perpPos.z += temp.z*k;
 					walkway.push(perpPos);
+
+					//fill grid
+					// console.log("grid cell filled");
+					fillGridCell( perpPos );
   				}
   			}
   		}
@@ -728,7 +735,7 @@ function createGraph(scene, cellList, voronoi, walkway, height)
 		}
 
 	    //form voronoi triangle thing with the three points and push it into voronoi
-	    var v = new VoronoiPoint( cellList[i].center,  epoint1, epoint2 );
+	    var v = new VoronoiPoint( cellList[i].center, epoint1, epoint2 );
 	    voronoi.push(v);
   	}
 	//you should have a voronoi which is a list of vertices(points) and an edgelist 
@@ -757,47 +764,151 @@ function createGraph(scene, cellList, voronoi, walkway, height)
 
 function initgrid()
 {
-	var index = 0;
-	//fill grid with empty elements
-	for(var i=0; i<gridsize; i++)
-	{
-		for(var j=0; j<gridsize; j++)
-		{
-			for(var k=0; k<gridsize; k++)
-			{
-				var gridcell = new GridCell();
-				grid.push(gridcell);
-			}	
-		}
-	}	
+	grid = new Uint8Array(17600000);
+	// grid.length = 0;
+
+	// gridcellsize = generalParameters.voxelsize;
+	// gridsize.x = gridsize.x/gridcellsize;
+	// gridsize.y = gridsize.y/gridcellsize;
+	// gridsize.z = gridsize.z/gridcellsize;
+	// //fill grid with empty elements
+	// for(var i=0; i<gridsize.x; i++)
+	// {
+	// 	for(var j=0; j<gridsize.y; j++)
+	// 	{
+	// 		for(var k=0; k<gridsize.z; k++)
+	// 		{
+	// 			// var gridcell = new GridCell();
+	// 			grid.push(0);
+	// 		}	
+	// 	}
+	// }	
 }
 
-function populateGrid()
+function fillGridCell( pos )
 {
-	//each grid cell contains a list of slabs that are in it
-	var index = 0;
+	//pass in position of voxel; if used to store 
+	var indx = Math.floor(pos.x/(200)); //Uint8 level 
+	var indy = Math.floor(pos.y/(200)); //Uint8 level
+	var indz = Math.floor(pos.z/(440)); //Uint8 level
 
-	//gridsize is 20
-	//grid is a gridsize by gridsize by gridsize thing
+	var index = indy*gridsize.x*gridsize.z + indx*gridsize.z + indz;
+	var minpos = new THREE.Vector3(indx*200, indy*440, indz*200);
+	var diff = new THREE.Vector3(pos.x - minpos.x, pos.y - minpos.y, pos.z - minpos.z);
 
-	for(var i=0; i<levelLayers.length; i++)
-	{		
-		//for each layer
-		for(var j=0; j<levelLayers[i].cellList.length; j++)
-		{		
-			//for each cell list
-			//find it position and put it in a grid cell
-			var cell = levelLayers[i].cellList[j];
-			var pos = cell.center;
-			var r = cell.radius;
+	var indbitx = Math.floor(diff.x/2); //8 bit level
+	var indbity = Math.floor(diff.y/2); //8 bit level
+	var indbitz = Math.floor(diff.z/2); //8 bit level
 
-			var indy = Math.floor(pos.y/gridsize);
-			var indx = Math.floor(pos.x/gridsize);
-			var indz = Math.floor(pos.z/gridsize);
+	if( indbity == 1 )
+	{
+		if( indbitx == 1 )
+		{
+			if( indbitz == 1 )
+			{
+				grid[index] = 0; //top, right, front
+			}
+			else
+			{
+				grid[index] = 1; //top, right, back
+			}
+		}
+		else
+		{
+			if( indbitz == 1 )
+			{
+				grid[index] = 2; //top, left, front
+			}
+			else
+			{
+				grid[index] = 3; //top, left, back
+			}
+		}
+	}
+	else
+	{
+		if( indbitx == 1 )
+		{
+			if( indbitz == 1 )
+			{
+				grid[index] = 4; //back, right, front
+			}
+			else
+			{
+				grid[index] = 5; //back, right, back
+			}
+		}
+		else
+		{
+			if( indbitz == 1 )
+			{
+				grid[index] = 6; //back, left, front
+			}
+			else
+			{
+				grid[index] = 7; //back, left, back
+			}
+		}
+	}
+}
 
-			index = indy*gridsize*gridsize + indx*gridsize + indz;
-			var gridcell = grid[index];
-			gridcell.slabs.push(cell); 
+function queryGridCell( pos )
+{
+	//pass in position of voxel; if used to store 
+	var indx = Math.floor(pos.x/(200)); //Uint8 level 
+	var indy = Math.floor(pos.y/(200)); //Uint8 level
+	var indz = Math.floor(pos.z/(440)); //Uint8 level
+
+	var index = indy*gridsize.x*gridsize.z + indx*gridsize.z + indz;
+
+	if( indbity == 1 )
+	{
+		if( indbitx == 1 )
+		{
+			if( indbitz == 1 )
+			{
+				return Math.abs(grid[index] - 0); //top, right, front
+			}
+			else
+			{
+				return Math.abs(grid[index] - 1); //top, right, back
+			}
+		}
+		else
+		{
+			if( indbitz == 1 )
+			{
+				return Math.abs(grid[index] - 2); //top, left, front
+			}
+			else
+			{
+				return Math.abs(grid[index] - 3); //top, left, back
+			}
+		}
+	}
+	else
+	{
+		if( indbitx == 1 )
+		{
+			if( indbitz == 1 )
+			{
+				return Math.abs(grid[index] - 4); //back, right, front
+			}
+			else
+			{
+				return Math.abs(grid[index] - 5); //back, right, back
+			}
+		}
+		else
+		{
+			if( indbitz == 1 )
+			{
+				return Math.abs(grid[index] - 6); //back, left, front
+			}
+			else
+			{
+				return Math.abs(grid[index] - 7); //back, left, back
+			}
 		}
 	}
 }
@@ -916,10 +1027,16 @@ function removeIntersectingPaths(linePoints)
 				//lines do intersect, so remove one of the lines
 				linePoints.splice(j,2);
 				j -= 2;
-				console.log("removed lines");
+				// console.log("removed lines");
 			}
     	}
 	}
+}
+
+function repositionPath(p1, p2)
+{
+	//TODO
+	return false;
 }
 
 function createInterConnectingWalkWays(pathPoints, walkway)
@@ -975,6 +1092,10 @@ function createInterConnectingWalkWays(pathPoints, walkway)
 					perpPos.y += temp.y*k;
 					perpPos.z += temp.z*k;
 					walkway.push(perpPos);
+
+					//fill grid
+					// console.log("grid cell filled");
+					fillGridCell( perpPos );
   				}
   			}
   		}
@@ -1038,9 +1159,17 @@ function interLayerWalkways(walkway)
 
 			//figure out which direction they walkway goes in and change p1 and p2 by width or length
 			pathShifting(p1, p2, currCell, toCell);
+			var conflictingPath = repositionPath(p1, p2);
+			if( conflictingPath )
+			{
+				//the path between 2D layers is attaching to a point on a cell 
+				//that has already been taken by a 2D layer walkway; pick another
+				j--;
+				continue;
+			}			
 
 			verts.push(p1);
-			verts.push(p2);
+			verts.push(p2);			
 		}
 	}
 
@@ -1135,7 +1264,6 @@ function create3DMap(scene)
 	var mat = pathMat;
 	var walkwayLayer = new WalkwayLayer();
 
-	populateGrid();
 	interLayerWalkways(walkwayLayer.walkway);
 
 	walkwayLayer.instancedWalkway = initwalkwayGeo(scene, geo, mat);
@@ -1396,24 +1524,6 @@ function createTerrain(scene)
 
 //------------------------------------------------------------------------------
 
-// called after the scene loads
-function onLoad(framework)
-{
-	var scene = framework.scene;
-	var camera = framework.camera;
-	var renderer = framework.renderer;
-	var gui = framework.gui;
-	var stats = framework.stats;
-
-	setupLightsandSkybox(scene, camera, renderer);
-	changeGUI(gui, camera, scene, renderer);
-
-	initgrid();
-	create3DMap(scene);
-	createTerrain(scene);
-	setMaterialValues();
-}
-
 function setMaterialValues()
 {
 	//interlayer voxels
@@ -1461,6 +1571,26 @@ function setMaterialValues()
 			}
 		}
 	}
+}
+
+//------------------------------------------------------------------------------
+
+// called after the scene loads
+function onLoad(framework)
+{
+	var scene = framework.scene;
+	var camera = framework.camera;
+	var renderer = framework.renderer;
+	var gui = framework.gui;
+	var stats = framework.stats;
+
+	setupLightsandSkybox(scene, camera, renderer);
+	changeGUI(gui, camera, scene, renderer);
+
+	initgrid();
+	create3DMap(scene);
+	createTerrain(scene);
+	setMaterialValues();
 }
 
 // called on frame updates

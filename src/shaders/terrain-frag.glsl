@@ -101,7 +101,7 @@ void main()
 	f = clamp(f, 0.0, 1.0);
 
 	finalColor = (1.0-f)*fogColor + f*f_color;
-	finalColor = absDot*finalColor*1.25;
+	finalColor = absDot*finalColor;//*1.25;
 
     if( dist>50.0 && ( length(finalColor) < length(ambientLight*basecolor) || (length(ambientLight*basecolor)<length(fogColor)) ) )
 	{

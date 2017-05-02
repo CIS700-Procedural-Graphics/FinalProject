@@ -14,7 +14,29 @@ export default class Cell //class for rooms or corridors
 		//holds a plain thats deformed in the shader
 		this.mountain = new THREE.Mesh();
 		this.mountainMaterial = new THREE.ShaderMaterial();
+
+		// //slots for attaching walkways and paths
+		// this.slot_left = [];
+		// this.slot_right = [];
+		// this.slot_front = [];
+		// this.slot_back = [];
 	}
+
+	// emptyslots(numslots)
+	// {
+	// 	this.slot_left.length = 0;
+	// 	this.slot_right.length = 0;
+	// 	this.slot_front.length = 0;
+	// 	this.slot_back.length = 0;
+
+	// 	for(var i=0; i<numslots; i++)
+	// 	{
+	// 		this.slot_left.push(false);
+	// 		this.slot_right.push(false);
+	// 		this.slot_front.push(false);
+	// 		this.slot_back.push(false);
+	// 	}
+	// }
 
 	drawCell(scene)
 	{
