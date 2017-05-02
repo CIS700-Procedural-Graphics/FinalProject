@@ -5,6 +5,8 @@ varying vec3 f_pos;
 varying float f_elevation;
 varying float f_moisture;
 
+varying vec4 viewSpace;
+
 vec2 hashSimplex( vec2 p ) // replace this by something better
 {
 	p = vec2( dot(p,vec2(127.1,311.7)),
@@ -57,7 +59,7 @@ float Elevation( vec3 p )
 	float total = 0.0;
 	float amplitude = 1.0;
 	float frequency = 1.0;
-	float peak_power = 1.14;
+	float peak_power = 1.13;
 
 	//Loop over n=4 octaves
 	for(int j=0; j< 4; j++)
@@ -104,16 +106,48 @@ float Moisture( vec3 p )
 	return moisture;
 }
 
+vec3 compNormal( vec3 p )
+{
+	float offset = 0.01;
+	vec3 temp = p;
+	temp.x = p.x - offset;
+	float slopeNegx = Elevation( temp );
+	temp.x = p.x + offset;
+	float slopePosx = Elevation( temp );
+
+	temp = p;
+	temp.y = p.y - offset;
+	float slopeNegy = Elevation( temp );
+	temp.y = p.y + offset;
+	float slopePosy = Elevation( temp );
+
+	temp = p;
+	temp.z = p.z - offset;
+	float slopeNegz = Elevation( temp );
+	temp.z = p.z + offset;
+	float slopePosz = Elevation( temp );
+
+	vec3 nor = vec3(slopePosx - slopeNegx,
+					slopePosy - slopeNegy,
+					slopePosz - slopeNegz);
+
+	nor = normalize(nor);
+	return nor;
+}
+
 void main()
 {
     f_uv = uv;
-    f_nor = normal;
+    
     f_pos = position;
     
     f_elevation = Elevation( position );
-    f_pos.y = f_elevation*2.0;
-    
     f_moisture = Moisture( position );
 
-    gl_Position = projectionMatrix * modelViewMatrix * vec4( f_pos, 1.0 );
+    f_pos.y = f_elevation*2.0;
+    f_nor = compNormal( f_pos );
+
+    viewSpace = modelViewMatrix*vec4(f_pos, 1.0);
+
+    gl_Position = projectionMatrix * viewSpace;
 }

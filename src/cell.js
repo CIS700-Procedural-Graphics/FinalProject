@@ -11,14 +11,9 @@ export default class Cell //class for rooms or corridors
 		this.cellLength = _length; //a z axis term
 		this.radius = Math.sqrt( this.cellLength*this.cellLength + this.cellWidth*this.cellWidth ) * 0.5;
 
-		//for block version of the mountains
-		this.roomVoxels = []; //holds a list of voxels -- so positions
-		this.voxelColors = []; //holds a list of voxels -- so positions
-		this.roomVoxelsMesh = new THREE.Mesh();
-		this.roomVoxelMat;
-
 		//holds a plain thats deformed in the shader
 		this.mountain = new THREE.Mesh();
+		this.mountainMaterial = new THREE.ShaderMaterial();
 	}
 
 	drawCell(scene)

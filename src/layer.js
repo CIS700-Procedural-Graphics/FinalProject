@@ -9,6 +9,6 @@ export default class Layer //class for rooms or corridors
 		this.walkway = []; //holds a list of voxels -- so positions
 		this.instancedWalkway = new THREE.Mesh();
 
-
+		this.instancedWalkwayMaterial = new THREE.RawShaderMaterial();
 	}
 }

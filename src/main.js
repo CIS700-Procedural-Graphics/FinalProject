@@ -25,9 +25,15 @@ var Pi = 3.14;
 var generalParameters = {
   Collisions: false,
   Fog: false,
-  FogDensity: 0.2,
-  voxelsize: 0.25
+  FogDensity: 0.1,
+  fog_Col: new THREE.Color(0xd5ddea),
+  voxelsize: 0.25,
+  maxInstanceCount: 65000
 }
+
+// var fogParameters = {
+// 	color: new THREE.Color(0x000000)
+// }
 
 var map2D = {
   numberOfCells: 4,
@@ -60,7 +66,32 @@ var slabMat = new THREE.ShaderMaterial({
 	    lightVec:
 	    {
 	        type: "v3",
-	        value: new THREE.Vector3( 10, 20, 30 )
+	        value: new THREE.Vector3( 1, 2, 3 )
+	    },
+	    camPos:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 10, 10, 10 )
+	    },
+	    fogSwitch:
+	    {
+	        type: "f",
+	        value: 0
+	    },
+	    fogColor:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 0.5, 0.5, 0.5 )
+	    },
+	    fogDensity:
+	    {
+	        type: "f",
+	        value: 0.1
+	    },
+	    rimColor:
+	    {
+	        type: "v3",
+	        value: new THREE.Vector3( 0.1, 0.1, 0.1 )
 	    }
 	},
 	vertexShader: require ('./shaders/slab-vert.glsl'),
@@ -84,7 +115,7 @@ var pathMat = new THREE.RawShaderMaterial({
 	    lightVec:
 	    {
 	        type: "v3",
-	        value: new THREE.Vector3( 10, 10, 10 )
+	        value: new THREE.Vector3( 1, 1, 1)
 	    },
 	    camPos:
 	    {
@@ -104,18 +135,13 @@ var pathMat = new THREE.RawShaderMaterial({
 	    fogDensity:
 	    {
 	        type: "f",
-	        value: generalParameters.FogDensity
+	        value: 0.1
 	    },
 	    rimColor:
 	    {
 	        type: "v3",
 	        value: new THREE.Vector3( 0.1, 0.1, 0.1 )
-	    },
-	    color:
-	    {
-	        type: "v3",
-	        value: new THREE.Vector3( 1.0, 0.3, 0.3 )
-	    },
+	    }
 	  },
 	vertexShader: require ('./shaders/paths-vert.glsl') ,
 	fragmentShader: require ('./shaders/paths-frag.glsl'),
@@ -124,6 +150,7 @@ var pathMat = new THREE.RawShaderMaterial({
 
 //------------------------------------------------------------------------------
 
+var directionalLight;
 var levelLayers = [];//list of 2D Layers
 var grid = [];
 var connectingWalkways = []; //list of walkwaylayers connecting
@@ -138,7 +165,7 @@ var TextActions = function(scene) {
 	}
 };
 
-function changeGUI(gui, camera, scene)
+function changeGUI(gui, camera, scene, renderer)
 {
 	var tweaks = gui.addFolder('Tweaks');
 
@@ -152,17 +179,74 @@ function changeGUI(gui, camera, scene)
 	map2DFolder.add(map2D, 'roomSizeMax', 1.1, 5.0).onChange(function(newVal) {});
 	map2DFolder.add(map2D, 'connectivity', 0.1, 0.9).onChange(function(newVal) {});
 	map2DFolder.add(map2D, 'walkWayWidth', 2.0, 6.0).onChange(function(newVal) {});
-	map2DFolder.add(map2D, 'crumbleStatus', 0.0, 1.0).onChange(function(newVal) {
-		map2D.crumbleStatus = 0.3 + 0.5*map2D.crumbleStatus;
+	map2DFolder.add(map2D, 'crumbleStatus', 0.15, 0.85).onChange(function(newVal) {
+		map2D.crumbleStatus = map2D.crumbleStatus;
 	});
 
 	var fog = tweaks.addFolder('Fog');
 	fog.add(generalParameters, 'Fog').onChange(function(newVal) {
+
+		if(newVal)
+		{
+			renderer.setClearColor( generalParameters.fog_Col );
+		}
+		else
+		{
+			renderer.setClearColor( 0x000000 );
+		}
+
 		pathMat.uniforms.fogSwitch.value = newVal;
+		slabMat.uniforms.fogSwitch.value = newVal;
+		for(var i=0; i<levelLayers.length; i++)
+		{
+			if(levelLayers[i].instancedWalkwayMaterial.uniforms.fogSwitch)
+			{
+				levelLayers[i].instancedWalkwayMaterial.uniforms.fogSwitch.value = newVal;
+			}
+		}
+
+		//terrain
+		for(var i=0; i<levelLayers.length; i++)
+		{
+			for(var j=0; j<levelLayers[i].cellList.length; j++)
+			{
+				var cell = levelLayers[i].cellList[j];
+				if(cell.mountainMaterial.uniforms.fogSwitch)
+				{
+					cell.mountainMaterial.uniforms.fogSwitch.value = newVal;
+				}
+			}
+		}
 	});
+
 	fog.add(generalParameters, 'FogDensity', 0.01, 0.1).onChange(function(newVal) {
-		pathMat.uniforms.fogDensity = Number(newVal);
+		pathMat.uniforms.fogDensity.value = newVal;
+		slabMat.uniforms.fogDensity.value = newVal;
+		for(var i=0; i<levelLayers.length; i++)
+		{
+			if(levelLayers[i].instancedWalkwayMaterial.uniforms.fogDensity)
+			{
+				levelLayers[i].instancedWalkwayMaterial.uniforms.fogDensity.value = newVal;
+			}
+		}
+
+		//terrain
+		for(var i=0; i<levelLayers.length; i++)
+		{
+			for(var j=0; j<levelLayers[i].cellList.length; j++)
+			{
+				var cell = levelLayers[i].cellList[j];
+				if(cell.mountainMaterial.uniforms.fogDensity)
+				{
+					cell.mountainMaterial.uniforms.fogDensity.value = newVal;
+				}
+			}
+		}
 	});
+
+	// fog.add(fogParameters, 'color', ).onChange(function(newVal) {
+	// 	generalParameters.fog_Col = color;
+	// });
 
 	gui.add(generalParameters, 'Collisions').onChange(function(newVal) {});
 
@@ -172,21 +256,15 @@ function changeGUI(gui, camera, scene)
 
 function setupLightsandSkybox(scene, camera, renderer)
 {
-	//add it to your own shader
-
-	// var hex = 0x000000;
-	// var near = 1;
-	// var far = 1000;
-	// scene.fog = new THREE.Fog(0xffffff, 1, 60);
-  	// scene.fog.color.setHSL( 0.55, 0.4, 0.8 );
+	scene.fog = new THREE.Fog(0xffffff, 1, 60);
+	scene.fog.color.setHSL( 0.0, 0.0, 0.0 );
 
 	// Set light
-	var directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
+	directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
 	directionalLight.color.setHSL(0.1, 1, 0.95);
-	directionalLight.position.set(1, 3, 2);
+	directionalLight.position.set(0, 1, 0);
 	directionalLight.position.multiplyScalar(10);
 	scene.add(directionalLight);
-	pathMat.lightVec = directionalLight.position;
 
 	// set skybox
 	var loader = new THREE.CubeTextureLoader();
@@ -201,7 +279,7 @@ function setupLightsandSkybox(scene, camera, renderer)
 	// renderer.setClearColor( 0xbfd1e5 );
 	// renderer.setClearColor( 0x7f7f7f );
 	renderer.setClearColor( 0x000000 );
-	scene.add(new THREE.AxisHelper(20));
+	// scene.add(new THREE.AxisHelper(20));
 
 	// set camera position
 	camera.position.set(50, 100, 50);
@@ -213,6 +291,7 @@ function onreset( scene )
 	cleanscene(scene);
 	create3DMap(scene);
 	createTerrain(scene);
+	setMaterialValues();
 }
 
 function cleanscene(scene)
@@ -237,7 +316,7 @@ function initwalkwayGeo(scene, walkwayGeo, walkwayMat)
 {
 	//define and set attributes of the instanced walkway
 	// geometry
-	var instances = 65000;
+	var instances = generalParameters.maxInstanceCount;
 	// per mesh data
 	var vertices = new THREE.BufferAttribute( new Float32Array( [
 		// Front
@@ -272,6 +351,41 @@ function initwalkwayGeo(scene, walkwayGeo, walkwayMat)
 		-1, -1, -1
 	] ), 3 );
 	walkwayGeo.addAttribute( 'position', vertices );
+
+	var normals = new THREE.BufferAttribute( new Float32Array( [
+		// Front
+		0, 0, 1,
+		0, 0, 1,
+		0, 0, 1,
+		0, 0, 1,
+		// Back
+		0, 0, -1,
+		0, 0, -1,
+		0, 0, -1,
+		0, 0, -1,
+		// Left
+		-1, 0, 0,
+		-1, 0, 0,
+		-1, 0, 0,
+		-1, 0, 0,
+		// Right
+		1, 0, 0,
+		1, 0, 0,
+		1, 0, 0,
+		1, 0, 0,
+		// Top
+		0, 1, 0,
+		0, 1, 0,
+		0, 1, 0,
+		0, 1, 0,
+		// Bottom
+		0, -1, 0,
+		0, -1, 0,
+		0, -1, 0,
+		0, -1, 0
+	] ), 3 );
+	walkwayGeo.addAttribute( 'normal', normals );
+
 	var uvs = new THREE.BufferAttribute( new Float32Array( [
 				//x	y	z
 				// Front
@@ -544,7 +658,7 @@ function createWalkWays(pathPoints, walkway, height)
 
   			for(var k=-w*0.5; k<=w*0.5; k=k+stepsize*1.1)
   			{
-  				if( map2D.crumbleStatus > RAND.random() )
+  				if( RAND.random() > map2D.crumbleStatus )
   				{
   				  	var perpPos = new THREE.Vector3(curvepos.x, curvepos.y, curvepos.z);
 					var temp = new THREE.Vector3(left.x, left.y, left.z);
@@ -804,7 +918,7 @@ function createInterConnectingWalkWays(pathPoints, walkway)
 
   			for(var k=-w*0.5; k<=w*0.5; k=k+1.1*stepsize)
   			{
-  				if( map2D.crumbleStatus > RAND.random() )
+  				if( RAND.random() > map2D.crumbleStatus )
   				{
   				  	var perpPos = new THREE.Vector3(curvepos.x, curvepos.y, curvepos.z);
 					var temp = new THREE.Vector3(left.x, left.y, left.z);
@@ -897,21 +1011,57 @@ function create3DMap(scene)
 		var geo = new THREE.InstancedBufferGeometry();
 
 		var mat = new THREE.RawShaderMaterial({
-			  uniforms:
-			  {
-			    color:
-			    {
-			        type: "v3",
-			        value: new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() )
-			    }
-			  },
-			vertexShader: require ('./shaders/walkway-vert.glsl') ,
-			fragmentShader: require ('./shaders/walkway-frag.glsl'),
-			side: THREE.DoubleSide,
-			transparent: false
-		} );
+						  uniforms:
+						  {
+						  	ambientLight:
+						    {
+						        type: "v3",
+						        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
+						    },
+						    lightVec:
+						    {
+						        type: "v3",
+						        value: new THREE.Vector3( 1, 1, 1 )
+						    },
+						    camPos:
+							{
+							    type: "v3",
+							    value: new THREE.Vector3( 10, 10, 10 )
+							},
+							fogSwitch:
+							{
+							    type: "f",
+							    value: 0
+							},
+							fogColor:
+							{
+							    type: "v3",
+							    value: new THREE.Vector3( 0.5, 0.5, 0.5 )
+							},
+							fogDensity:
+							{
+							    type: "f",
+							    value: 0.1
+							},
+							rimColor:
+							{
+							    type: "v3",
+							    value: new THREE.Vector3( 0.5, 0.5, 0.5 )
+							},
+						    albedo:
+						    {
+						        type: "v3",
+						        value: new THREE.Vector3( RAND.random(), RAND.random(), RAND.random() )
+						    }
+						  },
+						vertexShader: require ('./shaders/walkway-vert.glsl') ,
+						fragmentShader: require ('./shaders/walkway-frag.glsl'),
+						side: THREE.DoubleSide,
+						transparent: false
+					} );
 
-		layer.instancedWalkway = initwalkwayGeo(scene, geo, mat);
+		layer.instancedWalkwayMaterial = mat;
+		layer.instancedWalkway = initwalkwayGeo(scene, geo, layer.instancedWalkwayMaterial);
 		setWalkWayVoxels(layer.instancedWalkway, layer.walkway);
 
 		//add walkway to scene
@@ -944,7 +1094,7 @@ function initRoomGeo(scene, roomGeo, roomMat)
 {
 	//define and set attributes of the instanced walkway
 	// geometry
-	var instances = 65000;
+	var instances = generalParameters.maxInstanceCount;;
 	// per mesh data
 	var vertices = new THREE.BufferAttribute( new Float32Array( [
 		// Front
@@ -979,6 +1129,41 @@ function initRoomGeo(scene, roomGeo, roomMat)
 		-1, -1, -1
 	] ), 3 );
 	roomGeo.addAttribute( 'position', vertices );
+
+	var normals = new THREE.BufferAttribute( new Float32Array( [
+		// Front
+		0, 0, 1,
+		0, 0, 1,
+		0, 0, 1,
+		0, 0, 1,
+		// Back
+		0, 0, -1,
+		0, 0, -1,
+		0, 0, -1,
+		0, 0, -1,
+		// Left
+		-1, 0, 0,
+		-1, 0, 0,
+		-1, 0, 0,
+		-1, 0, 0,
+		// Right
+		1, 0, 0,
+		1, 0, 0,
+		1, 0, 0,
+		1, 0, 0,
+		// Top
+		0, 1, 0,
+		0, 1, 0,
+		0, 1, 0,
+		0, 1, 0,
+		// Bottom
+		0, -1, 0,
+		0, -1, 0,
+		0, -1, 0,
+		0, -1, 0
+	] ), 3 );
+	roomGeo.addAttribute( 'normal', normals );
+
 	var uvs = new THREE.BufferAttribute( new Float32Array( [
 				//x	y	z
 				// Front
@@ -1103,23 +1288,48 @@ function createTerrain(scene)
 					ambientLight:
 				    {
 				        type: "v3",
-				        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
+				        value: new THREE.Vector3( 0.1, 0.1, 0.1 )
 				    },
 				    lightVec:
 				    {
 				        type: "v3",
-				        value: new THREE.Vector3( 10, 20, 30 )
-				    }
+				        value: new THREE.Vector3( 1, 1, 1 )
+				    },
+				    camPos:
+					{
+					    type: "v3",
+					    value: new THREE.Vector3( 10, 10, 10 )
+					},
+					fogSwitch:
+					{
+					    type: "f",
+					    value: 0
+					},
+					fogColor:
+					{
+					    type: "v3",
+					    value: new THREE.Vector3( 0.5, 0.5, 0.5 )
+					},
+					fogDensity:
+					{
+					    type: "f",
+					    value: 0.1
+					},
+					rimColor:
+					{
+					    type: "v3",
+					    value: new THREE.Vector3( 0.1, 0.1, 0.1 )
+					}
 				},
 				vertexShader: require ('./shaders/terrain-vert.glsl') ,
 				fragmentShader: require ('./shaders/terrain-frag.glsl'),
-				side: THREE.DoubleSide,
-				transparent: false
+				side: THREE.DoubleSide
 			} );
 
 			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 50, 50 );
 			plane_geo.rotateX(0.5*Pi);
 
+			cell.mountainMaterial = mat;
 			cell.mountain = new THREE.Mesh(plane_geo, mat);
 			cell.mountain.position.set(center.x, center.y+0.5, center.z);
 			scene.add(cell.mountain);
@@ -1139,21 +1349,98 @@ function onLoad(framework)
 	var stats = framework.stats;
 
 	setupLightsandSkybox(scene, camera, renderer);
-	changeGUI(gui, camera, scene);
+	changeGUI(gui, camera, scene, renderer);
 
 	initgrid();
 	create3DMap(scene);
 	createTerrain(scene);
+	setMaterialValues();
+}
+
+function setMaterialValues()
+{
+	//interlayer voxels
+	if(pathMat)
+	{
+		pathMat.uniforms.lightVec.value.set( directionalLight.position.x, directionalLight.position.y, directionalLight.position.z );
+
+		pathMat.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+		pathMat.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+	}
+
+	//slabs
+	if(slabMat)
+	{
+		slabMat.uniforms.lightVec.value.set( directionalLight.position.x, directionalLight.position.y, directionalLight.position.z );
+
+		slabMat.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+		slabMat.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+	}
+
+	//2D layer voxels
+	for(var i=0; i<levelLayers.length; i++)
+	{
+		if(levelLayers[i].instancedWalkwayMaterial)
+		{
+			levelLayers[i].instancedWalkwayMaterial.uniforms.lightVec.value.set(directionalLight.position.x, directionalLight.position.y, directionalLight.position.z);
+
+			levelLayers[i].instancedWalkwayMaterial.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+			levelLayers[i].instancedWalkwayMaterial.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+		}
+	}
+
+	//terrain
+	for(var i=0; i<levelLayers.length; i++)
+	{
+		for(var j=0; j<levelLayers[i].cellList.length; j++)
+		{
+			var cell = levelLayers[i].cellList[j];
+			if(cell.mountainMaterial)
+			{
+				cell.mountainMaterial.uniforms.lightVec.value.set(directionalLight.position.x, directionalLight.position.y, directionalLight.position.z);
+
+				cell.mountainMaterial.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+				cell.mountainMaterial.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+			}
+		}
+	}
 }
 
 // called on frame updates
 function onUpdate(framework)
 {
-	if(pathMat.camPos)
+	//interlayer voxels
+	if(pathMat.uniforms.camPos)
 	{
-		pathMat.camPos.x = framework.camera.position.x;
-		pathMat.camPos.y = framework.camera.position.y;
-		pathMat.camPos.z = framework.camera.position.z;
+		pathMat.uniforms.camPos.value.set( framework.camera.position.x, framework.camera.position.y, framework.camera.position.z );
+	}
+
+	//slabs
+	if(slabMat.uniforms.camPos)
+	{
+		slabMat.uniforms.camPos.value.set( framework.camera.position.x, framework.camera.position.y, framework.camera.position.z );
+	}
+
+	//2D layer voxels
+	for(var i=0; i<levelLayers.length; i++)
+	{
+		if(levelLayers[i].instancedWalkwayMaterial.uniforms.camPos)
+		{
+			levelLayers[i].instancedWalkwayMaterial.uniforms.camPos.value.set( framework.camera.position.x, framework.camera.position.y, framework.camera.position.z );
+		}
+	}
+
+	//terrain
+	for(var i=0; i<levelLayers.length; i++)
+	{
+		for(var j=0; j<levelLayers[i].cellList.length; j++)
+		{
+			var cell = levelLayers[i].cellList[j];
+			if(cell.mountainMaterial.uniforms.camPos)
+			{
+				cell.mountainMaterial.uniforms.camPos.value.set( framework.camera.position.x, framework.camera.position.y, framework.camera.position.z );
+			}
+		}
 	}
 }
 
