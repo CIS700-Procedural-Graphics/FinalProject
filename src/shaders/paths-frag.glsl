@@ -49,9 +49,19 @@ void main()
     float f = exp(-fogDensity*dist*fogDensity*dist);
     f = clamp(f, 0.0, 1.0);
 
-    finalColor = (1.0-f)*fogColor + f*f_color.rgb;
+    finalColor = (1.0-f)*fogColor + f*f_color;
     finalColor = absDot*finalColor;
     
+	if( dist>50.0 && length(finalColor) < length(ambientLight*texColor.rgb) )
+	{
+		finalColor = fogColor;
+	}	
+	else if( length(finalColor)< length(ambientLight*texColor.rgb) )
+	{
+		float t = dist/50.0;
+		finalColor = t*fogColor + (1.0-t)*absDot*finalColor;
+	}
+
     finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;
 
     gl_FragColor = vec4( finalColor, 1.0 );

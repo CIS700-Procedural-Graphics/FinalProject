@@ -51,6 +51,16 @@ void main()
 	finalColor = (1.0-f)*fogColor + f*f_color.rgb;
 	finalColor = absDot*finalColor;
 
+	if( dist>50.0 && length(finalColor) < length(ambientLight*baseColor.rgb) )
+	{
+		finalColor = fogColor;
+	}	
+	else if( length(finalColor)< length(ambientLight*baseColor.rgb) )
+	{
+		float t = dist/50.0;
+		finalColor = t*fogColor + (1.0-t)*absDot*finalColor;
+	}
+
     finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;
 
     gl_FragColor = vec4( finalColor, 1.0 );	

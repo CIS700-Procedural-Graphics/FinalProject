@@ -55,8 +55,8 @@ vec3 biome_Gradient(float e, float m)
   	}
 	else
 	{
-		float u = m;
-		float v = e;
+		//float u = m;
+		//float v = e;
 
 		vec3 colorbottom = (1.0-m)*Green + m*Arid;
 		vec3 colortop = (1.0-m)*SuperLightGreen + m*SuperLightArid;
@@ -69,19 +69,20 @@ vec3 biome_Gradient(float e, float m)
 
 void main()
 {
-	vec3 basecolor = vec3(0.0,1.0,0.0);
-    //vec3 basecolor = biome_Gradient(f_elevation, f_moisture);
+    vec3 basecolor = biome_Gradient(f_elevation, f_moisture);
 
     vec3 eye_position = camPos;
     vec3 finalColor = vec3(0.0);
 
-    float absDot = clamp(dot(f_nor, normalize(lightVec)), 0.0, 1.0);
+    vec3 light = vec3(1.0);
 
-    vec3 finalColor_noFog = absDot*basecolor + ambientLight*basecolor;
+    float absDot = clamp(dot(f_nor, normalize(light)), 0.0, 1.0);
+
+    vec3 finalColor_noFog = absDot*basecolor.rgb + ambientLight*basecolor.rgb;
 
     //Fog Calculations
 	//get light an view directions
-	vec3 L = normalize( lightVec );
+	vec3 L = normalize( light );
 	vec3 V = normalize( eye_position - f_pos);
 
 	//diffuse lighting
@@ -100,7 +101,17 @@ void main()
 	f = clamp(f, 0.0, 1.0);
 
 	finalColor = (1.0-f)*fogColor + f*f_color;
-	finalColor = absDot*finalColor;
+	finalColor = absDot*finalColor*1.25;
+
+    if( dist>50.0 && ( length(finalColor) < length(ambientLight*basecolor) || (length(ambientLight*basecolor)<length(fogColor)) ) )
+	{
+		finalColor = fogColor;
+	}	
+	else if( (length(finalColor) < length(ambientLight*basecolor) || ( length(basecolor)<length(fogColor) ) ) )
+	{
+		float t = dist/50.0;
+		finalColor = t*fogColor + (1.0-t)*absDot*finalColor;
+	}
 
     finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;
 

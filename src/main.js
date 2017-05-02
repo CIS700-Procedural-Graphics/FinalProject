@@ -219,7 +219,7 @@ function changeGUI(gui, camera, scene, renderer)
 		}
 	});
 
-	fog.add(generalParameters, 'FogDensity', 0.01, 0.1).onChange(function(newVal) {
+	fog.add(generalParameters, 'FogDensity', 0.01, 0.15).onChange(function(newVal) {
 		pathMat.uniforms.fogDensity.value = newVal;
 		slabMat.uniforms.fogDensity.value = newVal;
 		for(var i=0; i<levelLayers.length; i++)
@@ -256,8 +256,8 @@ function changeGUI(gui, camera, scene, renderer)
 
 function setupLightsandSkybox(scene, camera, renderer)
 {
-	scene.fog = new THREE.Fog(0xffffff, 1, 60);
-	scene.fog.color.setHSL( 0.0, 0.0, 0.0 );
+	// scene.fog = new THREE.Fog(0xffffff, 1, 60);
+	// scene.fog.color.setHSL( 0.0, 0.0, 0.0 );
 
 	// Set light
 	directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
@@ -1288,7 +1288,7 @@ function createTerrain(scene)
 					ambientLight:
 				    {
 				        type: "v3",
-				        value: new THREE.Vector3( 0.1, 0.1, 0.1 )
+				        value: new THREE.Vector3( 0.2, 0.2, 0.2 )
 				    },
 				    lightVec:
 				    {
