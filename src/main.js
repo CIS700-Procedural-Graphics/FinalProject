@@ -24,7 +24,7 @@ var Pi = 3.14;
 var generalParameters = {
   Collisions: false,
   Fog: false,
-  FogDensity: 0.05,
+  FogDensity: 0.01,
   fog_Col: new THREE.Color(0xd5ddea),
   voxelsize: 0.25,
   maxInstanceCount: 200000
@@ -218,7 +218,7 @@ function changeGUI(gui, camera, scene, renderer)
 		}
 	});
 
-	fog.add(generalParameters, 'FogDensity', 0.01, 0.15).onChange(function(newVal) {
+	fog.add(generalParameters, 'FogDensity', 0.001, 0.15).onChange(function(newVal) {
 		pathMat.uniforms.fogDensity.value = newVal;
 		slabMat.uniforms.fogDensity.value = newVal;
 		for(var i=0; i<levelLayers.length; i++)
@@ -247,7 +247,7 @@ function changeGUI(gui, camera, scene, renderer)
 	// 	generalParameters.fog_Col = color;
 	// });
 
-	gui.add(generalParameters, 'Collisions').onChange(function(newVal) {});
+	// gui.add(generalParameters, 'Collisions').onChange(function(newVal) {});
 
 	var text = new TextActions(scene);
 	gui.add(text, 'NewLevel');
