@@ -15,29 +15,6 @@ uniform float fogDensity;
 uniform vec3 rimColor;
 varying vec4 viewSpace;
 
-// varying vec3 testcolor;
-
-vec3 biome_Banding(float e)
-{
-	//creates map with banding biomes
-	vec3 LAND = vec3(0.698, 0.31, 0.118);
-	vec3 WATER = vec3(0.0, 0.408, 0.847);
-	vec3 BEACH = vec3(0.698, 0.31, 0.118);
-	vec3 FOREST = vec3(0.698, 0.31, 0.118);
-	vec3 JUNGLE = vec3(0.0313, 0.447, 0.149);
-	vec3 BELOW_TUNDRA = vec3(0.709, 0.808, 0.608);
-	vec3 TUNDRA = vec3(0.62, 0.886, 0.698);
-	vec3 SNOW = vec3(0.9746, 0.9746, 0.9746);
-
-	if (e < 0.1) return WATER;
-	else if (e < 0.2) return BEACH;
-	else if (e < 0.3) return FOREST;
-	else if (e < 0.5) return JUNGLE;
-	else if (e < 0.7) return BELOW_TUNDRA;
-	else if (e < 0.9) return TUNDRA;
-	else return SNOW;
-}
-
 vec3 biome_Gradient(float e, float m)
 {
 	vec3 OceanDark = vec3(35.0/255.0, 70.0/255.0, 175.0/255.0);
@@ -50,18 +27,15 @@ vec3 biome_Gradient(float e, float m)
 
 	vec3 returnColor = vec3(0.0);
 
-  	if (e < 0.15)
+  	if (e < 0.1)
   	{
   		float t = e/0.15;
 		returnColor = (1.0-t)*OceanDark + t*OceanLight;
   	}
 	else
 	{
-		//float u = m;
-		//float v = e;
-
-		vec3 colorbottom = (1.0-m)*Green + m*Arid;
-		vec3 colortop = (1.0-m)*SuperLightGreen + m*SuperLightArid;
+		vec3 colorbottom = (0.7-m)*Green + (m+0.3)*Arid;
+		vec3 colortop = (0.8-m)*SuperLightGreen + (m+0.2)*SuperLightArid;
 
 		returnColor = (1.0-e)*colorbottom + e*colortop;
 	}
@@ -116,8 +90,6 @@ void main()
 	}
 
     finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;
-
-    // finalColor = testcolor;
 
     gl_FragColor = vec4( finalColor, 1.0 );
 }

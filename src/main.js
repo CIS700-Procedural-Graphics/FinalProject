@@ -57,7 +57,7 @@ var slabMat = new THREE.ShaderMaterial({
 		albedo:
 	    {
 	        type: "v3",
-	        value: new THREE.Vector3( 1.0, 0.98, 0.941 )
+	        value: new THREE.Vector3( 35.0/255.0, 70.0/255.0, 175.0/255.0 )
 	    },
 		ambientLight:
 	    {
@@ -867,8 +867,6 @@ function queryGridCell( pos )
 	return retVal;
 }
 
-
-
 //------------------------------------------------------------------------------
 
 function pathShifting(c1, c2, currCell, toCell)
@@ -1439,12 +1437,10 @@ function createTerrain(scene)
 		{
 			var cell = level.cellList[j];
 			var center = cell.center;
-			console.log(center.x, center.y, center.z);
 			var w = cell.cellWidth;
 			var l = cell.cellLength;
 			var h = 10;
 			var r = cell.radius;
-			console.log("radius", r);
 
 			var mat = new THREE.ShaderMaterial({
 				uniforms:
