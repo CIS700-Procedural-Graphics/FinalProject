@@ -800,28 +800,30 @@ function fillGridCell( pos )
 	var indbity = Math.floor(diff.y/2); //8 bit level
 	var indbitz = Math.floor(diff.z/2); //8 bit level
 
+	grid[index] = 0;
+
 	if( indbity == 1 )
 	{
 		if( indbitx == 1 )
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] = 0; //top, right, front
+				grid[index] += 128; //top, right, front
 			}
 			else
 			{
-				grid[index] = 1; //top, right, back
+				grid[index] += 64; //top, right, back
 			}
 		}
 		else
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] = 2; //top, left, front
+				grid[index] += 32; //top, left, front
 			}
 			else
 			{
-				grid[index] = 3; //top, left, back
+				grid[index] += 16; //top, left, back
 			}
 		}
 	}
@@ -831,22 +833,22 @@ function fillGridCell( pos )
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] = 4; //back, right, front
+				grid[index] += 8; //back, right, front
 			}
 			else
 			{
-				grid[index] = 5; //back, right, back
+				grid[index] += 4; //back, right, back
 			}
 		}
 		else
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] = 6; //back, left, front
+				grid[index] += 2; //back, left, front
 			}
 			else
 			{
-				grid[index] = 7; //back, left, back
+				grid[index] += 1; //back, left, back
 			}
 		}
 	}
@@ -860,58 +862,12 @@ function queryGridCell( pos )
 	var indz = Math.floor(pos.z/(440)); //Uint8 level
 
 	var index = indy*gridsize.x*gridsize.z + indx*gridsize.z + indz;
+	var retVal = grid[index];
 
-	if( indbity == 1 )
-	{
-		if( indbitx == 1 )
-		{
-			if( indbitz == 1 )
-			{
-				return Math.abs(grid[index] - 0); //top, right, front
-			}
-			else
-			{
-				return Math.abs(grid[index] - 1); //top, right, back
-			}
-		}
-		else
-		{
-			if( indbitz == 1 )
-			{
-				return Math.abs(grid[index] - 2); //top, left, front
-			}
-			else
-			{
-				return Math.abs(grid[index] - 3); //top, left, back
-			}
-		}
-	}
-	else
-	{
-		if( indbitx == 1 )
-		{
-			if( indbitz == 1 )
-			{
-				return Math.abs(grid[index] - 4); //back, right, front
-			}
-			else
-			{
-				return Math.abs(grid[index] - 5); //back, right, back
-			}
-		}
-		else
-		{
-			if( indbitz == 1 )
-			{
-				return Math.abs(grid[index] - 6); //back, left, front
-			}
-			else
-			{
-				return Math.abs(grid[index] - 7); //back, left, back
-			}
-		}
-	}
+	return retVal;
 }
+
+
 
 //------------------------------------------------------------------------------
 
@@ -1035,7 +991,26 @@ function removeIntersectingPaths(linePoints)
 
 function repositionPath(p1, p2)
 {
-	//TODO
+	//Doesn't work
+	var origin = new THREE.Vector3( p1.x, p1.y, p1.z );
+	var dir = new THREE.Vector3( p2.x-p1.x, p2.y-p1.y, p2.z-p1.z ); // backwards ray
+	dir = dir.normalize();
+	var dist = p1.distanceTo(p2);
+	origin = origin.add( dir.multiplyScalar(dist*0.85) );
+
+	var t = 0.5;
+
+	for(var i=dist*0.85; i<=dist; i=i+0.5)
+	{		
+		var pos = new THREE.Vector3(origin.x+t*dir.x, 
+									origin.y+t*dir.y, 
+									origin.z+t*dir.z);
+
+		if( queryGridCell(pos)>0 )
+		{
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -1159,14 +1134,16 @@ function interLayerWalkways(walkway)
 
 			//figure out which direction they walkway goes in and change p1 and p2 by width or length
 			pathShifting(p1, p2, currCell, toCell);
-			var conflictingPath = repositionPath(p1, p2);
-			if( conflictingPath )
-			{
-				//the path between 2D layers is attaching to a point on a cell 
-				//that has already been taken by a 2D layer walkway; pick another
-				j--;
-				continue;
-			}			
+
+			//below code was to remove an edge case where paths intersect with walkways
+			// var conflictingPath = repositionPath(p1, p2);
+			// if( conflictingPath )
+			// {
+			// 	//the path between 2D layers is attaching to a point on a cell 
+			// 	//that has already been taken by a 2D layer walkway; pick another
+			// 	j--;
+			// 	continue;
+			// }			
 
 			verts.push(p1);
 			verts.push(p2);			
@@ -1462,10 +1439,12 @@ function createTerrain(scene)
 		{
 			var cell = level.cellList[j];
 			var center = cell.center;
+			console.log(center.x, center.y, center.z);
 			var w = cell.cellWidth;
 			var l = cell.cellLength;
 			var h = 10;
 			var r = cell.radius;
+			console.log("radius", r);
 
 			var mat = new THREE.ShaderMaterial({
 				uniforms:
@@ -1504,6 +1483,26 @@ function createTerrain(scene)
 					{
 					    type: "v3",
 					    value: new THREE.Vector3( 0.1, 0.1, 0.1 )
+					},
+					slabCenter:
+					{
+					    type: "v3",
+					    value: new THREE.Vector3( center.x, center.y, center.z )
+					},
+					width:
+					{
+					    type: "f",
+					    value: w
+					},
+					length:
+					{
+					    type: "f",
+					    value: l
+					},
+					slabRadius:
+					{
+					    type: "f",
+					    value: r*2.0
 					}
 				},
 				vertexShader: require ('./shaders/terrain-vert.glsl') ,
@@ -1511,7 +1510,7 @@ function createTerrain(scene)
 				side: THREE.DoubleSide
 			} );
 
-			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 50, 50 );
+			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 100, 100 );
 			plane_geo.rotateX(0.5*Pi);
 
 			cell.mountainMaterial = mat;
@@ -1533,6 +1532,9 @@ function setMaterialValues()
 
 		pathMat.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
 		pathMat.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+
+		pathMat.uniforms.fogDensity.value =  generalParameters.FogDensity;
+		pathMat.uniforms.fogSwitch.value = generalParameters.Fog;
 	}
 
 	//slabs
@@ -1542,6 +1544,9 @@ function setMaterialValues()
 
 		slabMat.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
 		slabMat.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+
+		slabMat.uniforms.fogDensity.value = generalParameters.FogDensity;
+		slabMat.uniforms.fogSwitch.value = generalParameters.Fog;
 	}
 
 	//2D layer voxels
@@ -1553,6 +1558,9 @@ function setMaterialValues()
 
 			levelLayers[i].instancedWalkwayMaterial.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
 			levelLayers[i].instancedWalkwayMaterial.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+
+			levelLayers[i].instancedWalkwayMaterial.uniforms.fogDensity.value = generalParameters.FogDensity ;
+			levelLayers[i].instancedWalkwayMaterial.uniforms.fogSwitch.value = generalParameters.Fog;
 		}
 	}
 
@@ -1568,6 +1576,9 @@ function setMaterialValues()
 
 				cell.mountainMaterial.uniforms.fogColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
 				cell.mountainMaterial.uniforms.rimColor.value.set( generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b );
+
+				cell.mountainMaterial.uniforms.fogDensity.value = generalParameters.FogDensity;
+				cell.mountainMaterial.uniforms.fogSwitch.value = generalParameters.Fog;
 			}
 		}
 	}

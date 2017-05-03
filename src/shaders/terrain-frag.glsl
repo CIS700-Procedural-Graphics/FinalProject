@@ -15,6 +15,8 @@ uniform float fogDensity;
 uniform vec3 rimColor;
 varying vec4 viewSpace;
 
+// varying vec3 testcolor;
+
 vec3 biome_Banding(float e)
 {
 	//creates map with banding biomes
@@ -114,6 +116,8 @@ void main()
 	}
 
     finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;
+
+    // finalColor = testcolor;
 
     gl_FragColor = vec4( finalColor, 1.0 );
 }

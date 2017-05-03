@@ -1,9 +1,14 @@
+uniform vec3 slabCenter;
+uniform float slabRadius;
+
 varying vec2 f_uv;
 varying vec3 f_nor;
 varying vec3 f_pos;
 
 varying float f_elevation;
 varying float f_moisture;
+
+// varying vec3 testcolor;
 
 varying vec4 viewSpace;
 
@@ -57,8 +62,8 @@ float noiseGradient2D( in vec2 p )
 float Elevation( vec3 p )
 {
 	float total = 0.0;
-	float amplitude = 1.0;
-	float frequency = 1.0;
+	float amplitude = 2.5;
+	float frequency = 0.3;
 	float peak_power = 1.13;
 
 	//Loop over n=4 octaves
@@ -83,8 +88,8 @@ float Elevation( vec3 p )
 float Moisture( vec3 p )
 {
 	float total = 0.0;
-	float amplitude = 1.0;
-	float frequency = 1.0;
+	float amplitude = 2.5;
+	float frequency = 0.3;
 	float peak_power = 1.14;
 
 	//Loop over n=4 octaves
@@ -141,8 +146,18 @@ void main()
     
     f_pos = position;
     
-    f_elevation = Elevation( position );
-    f_moisture = Moisture( position );
+    f_elevation = Elevation( position + slabCenter );
+    f_moisture = Moisture( position + slabCenter );
+
+    vec3 center = vec3(0.0, 0.0, 0.0); //center has to be relative to the plain itself, so use origin
+    vec3 p = vec3( f_pos.x, 0.0, f_pos.z);
+
+    float absDist = abs(distance(f_pos, center));
+    float relDist = absDist/(slabRadius);
+	float scaleValue = 1.0-relDist;
+    
+    f_elevation = f_elevation*scaleValue;
+    f_moisture = f_moisture;
 
     f_pos.y = f_elevation*2.0;
     f_nor = compNormal( f_pos );
