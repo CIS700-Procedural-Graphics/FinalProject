@@ -24,7 +24,7 @@ var Pi = 3.14;
 var generalParameters = {
   Collisions: false,
   Fog: false,
-  FogDensity: 0.1,
+  FogDensity: 0.05,
   fog_Col: new THREE.Color(0xd5ddea),
   voxelsize: 0.25,
   maxInstanceCount: 200000
@@ -35,18 +35,17 @@ var generalParameters = {
 // }
 
 var map2D = {
-  numberOfCells: 4,
-  connectivity: 0.3,
+  numberOfCells: 10,
+  connectivity: 0.68,
   roomSizeMin: 2.0, //controls min of width and length of rooms
   roomSizeMax: 3.0, //controls max of width and length of rooms
   walkWayWidth: 2.5,
-  crumbleStatus: 0.5,
-  numslots: 3
+  crumbleStatus: 0.83
 }
 
 var level3D = {
   numberOfLayers: 2,
-  connectivity: 0.35
+  connectivity: 0.61
 }
 
 //material for slab below mountains
