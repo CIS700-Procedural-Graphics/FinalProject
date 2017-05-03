@@ -1,6 +1,5 @@
-//skybox images from: https://github.com/simianarmy/webgl-skybox/tree/master/images
 //simplex noise function: https://www.npmjs.com/package/simplex-noise
-//terrain noise: http://www.redblobgames.com/maps/terrain-from-noise/
+//terrain generation: http://www.redblobgames.com/maps/terrain-from-noise/
 
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about this much
 import Framework from './framework'
@@ -265,7 +264,6 @@ function setupLightsandSkybox(scene, camera, renderer)
 	scene.add(directionalLight);
 
 	renderer.setClearColor( 0x000000 );
-	// scene.add(new THREE.AxisHelper(20));
 
 	// set camera position
 	camera.position.set(50, 100, 50);
@@ -761,36 +759,18 @@ function createGraph(scene, cellList, voronoi, walkway, height)
 }
 
 //------------------------------------------------------------------------------
-
+//Was using the grid and its related functions for intersections and collisions but it takes too much memory, try a kd tree
 function initgrid()
 {
-	grid = new Uint8Array(17600000);
-	// grid.length = 0;
-
-	// gridcellsize = generalParameters.voxelsize;
-	// gridsize.x = gridsize.x/gridcellsize;
-	// gridsize.y = gridsize.y/gridcellsize;
-	// gridsize.z = gridsize.z/gridcellsize;
-	// //fill grid with empty elements
-	// for(var i=0; i<gridsize.x; i++)
-	// {
-	// 	for(var j=0; j<gridsize.y; j++)
-	// 	{
-	// 		for(var k=0; k<gridsize.z; k++)
-	// 		{
-	// 			// var gridcell = new GridCell();
-	// 			grid.push(0);
-	// 		}	
-	// 	}
-	// }	
+	grid = new Uint8Array(17600000);	
 }
 
 function fillGridCell( pos )
 {
 	//pass in position of voxel; if used to store 
-	var indx = Math.floor(pos.x/(200)); //Uint8 level 
-	var indy = Math.floor(pos.y/(200)); //Uint8 level
-	var indz = Math.floor(pos.z/(440)); //Uint8 level
+	var indx = Math.floor(pos.x*2); //Uint8 level 
+	var indy = Math.floor(pos.y*2); //Uint8 level
+	var indz = Math.floor(pos.z*2); //Uint8 level
 
 	var index = indy*gridsize.x*gridsize.z + indx*gridsize.z + indz;
 	var minpos = new THREE.Vector3(indx*200, indy*440, indz*200);
@@ -808,22 +788,22 @@ function fillGridCell( pos )
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] += 128; //top, right, front
+				grid[index] = grid[index] + 128; //top, right, front
 			}
 			else
 			{
-				grid[index] += 64; //top, right, back
+				grid[index] = grid[index] + 64; //top, right, back
 			}
 		}
 		else
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] += 32; //top, left, front
+				grid[index] = grid[index] + 32; //top, left, front
 			}
 			else
 			{
-				grid[index] += 16; //top, left, back
+				grid[index] = grid[index] + 16; //top, left, back
 			}
 		}
 	}
@@ -833,22 +813,22 @@ function fillGridCell( pos )
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] += 8; //back, right, front
+				grid[index] = grid[index] + 8; //back, right, front
 			}
 			else
 			{
-				grid[index] += 4; //back, right, back
+				grid[index] = grid[index] + 4; //back, right, back
 			}
 		}
 		else
 		{
 			if( indbitz == 1 )
 			{
-				grid[index] += 2; //back, left, front
+				grid[index] = grid[index] + 2; //back, left, front
 			}
 			else
 			{
-				grid[index] += 1; //back, left, back
+				grid[index] = grid[index] + 1; //back, left, back
 			}
 		}
 	}
@@ -857,9 +837,9 @@ function fillGridCell( pos )
 function queryGridCell( pos )
 {
 	//pass in position of voxel; if used to store 
-	var indx = Math.floor(pos.x/(200)); //Uint8 level 
-	var indy = Math.floor(pos.y/(200)); //Uint8 level
-	var indz = Math.floor(pos.z/(440)); //Uint8 level
+	var indx = Math.floor(pos.x*2); //Uint8 level 
+	var indy = Math.floor(pos.y*2); //Uint8 level
+	var indz = Math.floor(pos.z*2); //Uint8 level
 
 	var index = indy*gridsize.x*gridsize.z + indx*gridsize.z + indz;
 	var retVal = grid[index];
@@ -989,20 +969,18 @@ function removeIntersectingPaths(linePoints)
 
 function repositionPath(p1, p2)
 {
-	//Doesn't work
+	//Doesn't work -- too much memory or computation -- chrome dies
+	//try using a kd tree or a BVH
 	var origin = new THREE.Vector3( p1.x, p1.y, p1.z );
 	var dir = new THREE.Vector3( p2.x-p1.x, p2.y-p1.y, p2.z-p1.z ); // backwards ray
 	dir = dir.normalize();
 	var dist = p1.distanceTo(p2);
-	origin = origin.add( dir.multiplyScalar(dist*0.85) );
 
-	var t = 0.5;
-
-	for(var i=dist*0.85; i<=dist; i=i+0.5)
+	for(var i=dist*0.85; i<=dist; i=i++)
 	{		
-		var pos = new THREE.Vector3(origin.x+t*dir.x, 
-									origin.y+t*dir.y, 
-									origin.z+t*dir.z);
+		var pos = new THREE.Vector3(origin.x+i*dir.x, 
+									origin.y+i*dir.y, 
+									origin.z+i*dir.z);
 
 		if( queryGridCell(pos)>0 )
 		{
@@ -1139,7 +1117,7 @@ function interLayerWalkways(walkway)
 			// {
 			// 	//the path between 2D layers is attaching to a point on a cell 
 			// 	//that has already been taken by a 2D layer walkway; pick another
-			// 	j--;
+			// 	// j--;
 			// 	continue;
 			// }			
 
@@ -1246,184 +1224,6 @@ function create3DMap(scene)
 
 	//add walkway to scene
 	scene.add(walkwayLayer.instancedWalkway);
-}
-
-//------------------------------------------------------------------------------
-
-function initRoomGeo(scene, roomGeo, roomMat)
-{
-	//define and set attributes of the instanced walkway
-	// geometry
-	var instances = generalParameters.maxInstanceCount;;
-	// per mesh data
-	var vertices = new THREE.BufferAttribute( new Float32Array( [
-		// Front
-		-1, 1, 1,
-		1, 1, 1,
-		-1, -1, 1,
-		1, -1, 1,
-		// Back
-		1, 1, -1,
-		-1, 1, -1,
-		1, -1, -1,
-		-1, -1, -1,
-		// Left
-		-1, 1, -1,
-		-1, 1, 1,
-		-1, -1, -1,
-		-1, -1, 1,
-		// Right
-		1, 1, 1,
-		1, 1, -1,
-		1, -1, 1,
-		1, -1, -1,
-		// Top
-		-1, 1, 1,
-		1, 1, 1,
-		-1, 1, -1,
-		1, 1, -1,
-		// Bottom
-		1, -1, 1,
-		-1, -1, 1,
-		1, -1, -1,
-		-1, -1, -1
-	] ), 3 );
-	roomGeo.addAttribute( 'position', vertices );
-
-	var normals = new THREE.BufferAttribute( new Float32Array( [
-		// Front
-		0, 0, 1,
-		0, 0, 1,
-		0, 0, 1,
-		0, 0, 1,
-		// Back
-		0, 0, -1,
-		0, 0, -1,
-		0, 0, -1,
-		0, 0, -1,
-		// Left
-		-1, 0, 0,
-		-1, 0, 0,
-		-1, 0, 0,
-		-1, 0, 0,
-		// Right
-		1, 0, 0,
-		1, 0, 0,
-		1, 0, 0,
-		1, 0, 0,
-		// Top
-		0, 1, 0,
-		0, 1, 0,
-		0, 1, 0,
-		0, 1, 0,
-		// Bottom
-		0, -1, 0,
-		0, -1, 0,
-		0, -1, 0,
-		0, -1, 0
-	] ), 3 );
-	roomGeo.addAttribute( 'normal', normals );
-
-	var uvs = new THREE.BufferAttribute( new Float32Array( [
-				//x	y	z
-				// Front
-				0, 0,
-				1, 0,
-				0, 1,
-				1, 1,
-				// Back
-				1, 0,
-				0, 0,
-				1, 1,
-				0, 1,
-				// Left
-				1, 1,
-				1, 0,
-				0, 1,
-				0, 0,
-				// Right
-				1, 0,
-				1, 1,
-				0, 0,
-				0, 1,
-				// Top
-				0, 0,
-				1, 0,
-				0, 1,
-				1, 1,
-				// Bottom
-				1, 0,
-				0, 0,
-				1, 1,
-				0, 1
-	] ), 2 );
-	roomGeo.addAttribute( 'uv', uvs );
-	var indices = new Uint16Array( [
-		0, 1, 2,
-		2, 1, 3,
-		4, 5, 6,
-		6, 5, 7,
-		8, 9, 10,
-		10, 9, 11,
-		12, 13, 14,
-		14, 13, 15,
-		16, 17, 18,
-		18, 17, 19,
-		20, 21, 22,
-		22, 21, 23
-	] );
-	roomGeo.setIndex( new THREE.BufferAttribute( indices, 1 ) );
-
-	//giving it random positions; -- change later with actual positions
-	// per instance data
-	var offsets = new THREE.InstancedBufferAttribute( new Float32Array( instances * 3 ), 3, 1 );
-	// var vector = new THREE.Vector4();
-	for ( var i = 0, ul = offsets.count; i < ul; i++ ) 
-	{
-		var x = Math.random() * 100 - 50;
-		var y = Math.random() * 100 - 50;
-		var z = Math.random() * 100 - 50;
-		// vector.set( x, y, z, 0 );
-		// move out at least 5 units from center in current direction
-		offsets.setXYZ( i, x + x * 5, y + y * 5, z + z * 5 );
-	}
-	roomGeo.addAttribute( 'offset', offsets ); // per mesh translation
-
-	//giving it random values; -- change later with actual positions
-	// per instance data
-	var voxelColors = new THREE.InstancedBufferAttribute( new Float32Array( instances * 3 ), 3, 1 );
-	for ( var i = 0, ul = offsets.count; i < ul; i++ ) 
-	{
-		var x = Math.random();
-		var y = Math.random();
-		var z = Math.random();
-		voxelColors.setXYZ( i, x, y, z );
-	}
-	roomGeo.addAttribute( 'color', voxelColors ); // per mesh translation
-
-	//scale cubes that form walkway
-	roomGeo.scale ( generalParameters.voxelsize/4.0, generalParameters.voxelsize/4.0, generalParameters.voxelsize/4.0 );
-
-	//creating bounding sphere
-	var boundingSphereCenter = new THREE.Vector3(0,0,0);
-	var boundingSphereRadius = 300;
-	roomGeo.boundingSphere = new THREE.Sphere(boundingSphereCenter, boundingSphereRadius);
-
-	//create mesh
-	return new THREE.Mesh( roomGeo, roomMat );
-}
-
-function setVoxels(roomMesh, roomVoxels, voxelColors)
-{
-	var offsets = roomMesh.geometry.getAttribute("offset");
-	var colors = roomMesh.geometry.getAttribute("color");
-	roomMesh.geometry.maxInstancedCount = roomVoxels.length;
-
-	for ( var i = 0; i < roomVoxels.length; i++ ) 
-	{
-		offsets.setXYZ(i, roomVoxels[i].x, roomVoxels[i].y, roomVoxels[i].z);
-		colors.setXYZ(i, voxelColors[i].x, voxelColors[i].y, voxelColors[i].z);
-	}
 }
 
 //------------------------------------------------------------------------------
