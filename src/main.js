@@ -169,7 +169,7 @@ function changeGUI(gui, camera, scene, renderer)
 	var tweaks = gui.addFolder('Tweaks');
 
 	var level3DFolder = tweaks.addFolder('3D Level parameters');
-	level3DFolder.add(level3D, 'numberOfLayers', 3, 10).step(1).onChange(function(newVal) {});
+	level3DFolder.add(level3D, 'numberOfLayers', 1, 5).step(1).onChange(function(newVal) {});
 	level3DFolder.add(level3D, 'connectivity', 0.1, 1.0).onChange(function(newVal) {});
 
 	var map2DFolder = tweaks.addFolder('2D Layer parameters');
