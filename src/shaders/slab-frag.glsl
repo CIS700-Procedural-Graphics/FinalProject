@@ -47,7 +47,7 @@ void main()
     finalColor = (1.0-f)*fogColor + f*f_color.rgb;
     finalColor = absDot*finalColor;
 
-	if( dist>50.0 && length(finalColor) < length(finalColor_noFog) )
+	if( dist>75.0 )
 	{
 		finalColor = fogColor;
 	}	
