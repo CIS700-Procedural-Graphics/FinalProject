@@ -218,7 +218,7 @@ function changeGUI(gui, camera, scene, renderer)
 		}
 	});
 
-	fog.add(generalParameters, 'FogDensity', 0.001, 0.15).onChange(function(newVal) {
+	fog.add(generalParameters, 'FogDensity', 0.0001, 0.15).onChange(function(newVal) {
 		pathMat.uniforms.fogDensity.value = newVal;
 		slabMat.uniforms.fogDensity.value = newVal;
 		for(var i=0; i<levelLayers.length; i++)

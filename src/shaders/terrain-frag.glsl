@@ -79,11 +79,11 @@ void main()
 	finalColor = (1.0-f)*fogColor + f*f_color;
 	finalColor = absDot*finalColor;//*1.25;
 
-    if( dist>50.0 && ( length(finalColor) < length(ambientLight*basecolor) || (length(ambientLight*basecolor)<length(fogColor)) ) )
+    if( dist>50.0 )
 	{
 		finalColor = fogColor;
 	}	
-	else if( (length(finalColor) < length(ambientLight*basecolor) || ( length(basecolor)<length(fogColor) ) ) )
+	else 
 	{
 		float t = dist/50.0;
 		finalColor = t*fogColor + (1.0-t)*absDot*finalColor;
