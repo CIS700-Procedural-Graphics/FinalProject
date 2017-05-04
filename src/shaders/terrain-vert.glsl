@@ -242,7 +242,7 @@ void main()
 
     float absDist = abs(distance(f_pos, center));
     float relDist = absDist/radius;
-		float scaleValue = 1.0-relDist;
+	float scaleValue = 1.0-relDist;
 
     if(relDist > 0.9)
     {
@@ -250,7 +250,6 @@ void main()
     }
 
     f_elevation = f_elevation*scaleValue;
-    f_moisture = f_moisture;
 
     f_pos.y = f_elevation*2.0;
     f_nor = compNormal( f_pos );
