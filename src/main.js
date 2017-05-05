@@ -514,8 +514,8 @@ function spawn2DCells(scene, cellList, floorHeight)
 
 		var flag_create = true;
 
-		var centx = RAND.random()*100;
-		var centz = RAND.random()*100;
+		var centx = RAND.random()*150;
+		var centz = RAND.random()*150;
 
 		var w = (map2D.roomSizeMin + RAND.random()*(map2D.roomSizeMax-map2D.roomSizeMin))*roomscale ;
 		var l = (map2D.roomSizeMin + RAND.random()*(map2D.roomSizeMax-map2D.roomSizeMin))*roomscale ;
