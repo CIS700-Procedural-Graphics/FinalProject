@@ -2,7 +2,8 @@
 
 Author: Aman Sachan
 
-The design doc exists in a pdf.
+The final report exists in a pdf.
+The Results folder contains images, videos and a report for the project.
 
 ## Final Submission:
 
