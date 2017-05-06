@@ -17,7 +17,7 @@ export default class MusicAnalysis{
         //Not clear how to handle/list/define these
         this.MQgravity = {
             //List of note values that match grounding vs lifting 
-            groundingNotes: [36],
+            groundingNotes: [36,35],
             liftingNotes: [38],
         }
     }

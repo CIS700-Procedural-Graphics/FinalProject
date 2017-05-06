@@ -11,10 +11,11 @@
 
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about this much
 //Need g_VXmanager to add object3D to scene
-import {g_VXmanager} from "./visualExpression.js"
+import {g_VXmanager} from "./VXmanager.js"
 
 
-export class PathContainer{
+export class PathContainer{ //NOT REALLY a container, is it?
+
     //Requires initial values for msec, beat and point so getCurrentPointInfo can be
     // called before any control points have been added by the app
     constructor( initBufferLength, iniperfMsec, iniperfBeatRaw, initPointArr3 ){
@@ -50,10 +51,10 @@ export class PathContainer{
         this.lineBufferGeometry = new THREE.BufferGeometry();
         this.updateGeometryBuffer();
         this.setDrawRangeStart( 0 );
+        this.isVisible = true;
 
-        //Make the object3D and add to scene
+        //Make the object3D
         this.lineObject3D = new THREE.Line(this.lineBufferGeometry, this.lineMaterial );
-        g_VXmanager.addSceneObject( this.lineObject3D );
     }
 
     //Return info on current/most-recent control point
@@ -147,6 +148,17 @@ export class PathContainer{
         var count = this.curInd - start + 1;
         this.lineBufferGeometry.setDrawRange( start, count );
         this.lineBufferGeometry.attributes.position.needsUpdate = true; // required after the first render
+    }
+
+    setVisible( flag ){
+        this.lineObject3D.visible = flag;
+    }
+
+    setupGUI( gui ){
+        var f = gui.addFolder( 'PathCont.');
+        f.add( this, 'isVisible' ).onChange( function(newVal) {
+            this.object.setVisible( newVal );
+        });
     }
 
     //Add the Object3D to scene for rendering

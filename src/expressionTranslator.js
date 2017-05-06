@@ -1,5 +1,9 @@
 "use strict";
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about this much
+//import DAT from 'dat-gui'
+//Newer version of dat-gui fixes presets bug
+import dat from '../../dat-gui-git/dat.gui.npm/build/dat.gui.js'
+
 
 //Expression Translator
 //
@@ -11,7 +15,9 @@ const THREE = require('three'); // older modules are imported like this. You sho
 
 import MusicExpression from "./musicalExpression.js"
 //Not sure we need VXmanager in here
-import {VisualExpression, g_VXmanager} from "./visualExpression.js"
+import {g_VXmanager} from "./VXmanager.js"
+import {g_floatListToArray} from './utils.js'
+import {guiPresets_TX} from './guiPresets.js'
 
 //Object containing available TX's by MXtype.
 var TXmasterList={};
@@ -84,6 +90,18 @@ class Translation{
     updateForFrame( MX, musicalTiming ){
         throw "undefined Translation:updateForFrame()"
     }
+
+    //setup gui
+    //Once translation class is redone, we'll probably have
+    // MX-type-specific options/params held within the translation
+    // instance, so that MX's can be ephemeral while we keep options
+    // consistent.
+    setupGUI( gui, maingui /*top-level gui needed for remember()*/ ){
+        //override in derived class as needed
+        //??? or we might have translation mapping options set here,
+        // like this translator takes MX of this type and goes to this type of VX
+        //Not sure
+    }
 }
 
 ///////////////////////////////////
@@ -106,7 +124,123 @@ var TXinit = function(){
                                     'gravity', //MXtype
                                     'pathDisplacement', //VXtypeList - can be string if just one 
                                     g_VXmanager.getMainPathVX() ); // Pass in VX for main path - hard-coded for now
-    TXgravity.updateForFrame = function( MX, currentMusicalTiming /* timing of this frame */ ){
+    TXgravity.displacementMap = {
+        grounding: [
+                    ".5 -.2 .4", //beatDiv 0
+                    "0 0 0 ",   //1
+                    "0 0 0 ",   //2
+                    ".2 .1 .5", //3 16th note
+                    "0 0 0 ",   //4
+                    "0 0 0 ",   //5
+                    ".3 .3 .2", //6 8th note
+                    "0 0 0 ",   //7
+                    "0 0 0 ",   //8
+                    ".2 .1 .5",  //9 16th
+                    "0 0 0",    //10
+                    "0 0 0",    //11
+        ],
+        lifting: [
+                    ".1 .2 .2", //beatDiv 0
+                    "0 0 0 ",   //1
+                    "0 0 0 ",   //2
+                    "0 .3 .1", //3 16th note
+                    "0 0 0 ",   //4
+                    "0 0 0 ",   //5
+                    "0 .5 .1", //6 8th note
+                    "0 0 0 ",   //7
+                    "0 0 0 ",   //8
+                    "0 .3 -.2",  //9 16th
+                    "0 0 0",    //10
+                    "0 0 0",    //11
+        ]
+    }
+
+    TXgravity.getDisplacement = function( MX, beatDiv ){
+        return g_floatListToArray( this.displacementMap[MX.gravity][beatDiv] );
+    }
+
+    TXgravity.setupGUI = function( gui, maingui ){
+        var f = gui.addFolder( this.instanceName );
+        f.open();
+
+        //Only adding displacement amplitude options for 16th-note divs for now
+        var str = ['1','e','&','a'];
+        for( var ind of [0,3,6,9]){
+            f.add( this.displacementMap.grounding, ind.toString() ).name('ground.'+str[ind/3] ).onFinishChange( function(newVal) {
+                //this.object = this.displacementMap.grounding
+                //this.property = result of ind.toString() above
+                this.object[this.property] = newVal; 
+            });
+        }
+        for( var ind of [0,3,6,9]){
+            f.add( this.displacementMap.lifting, ind.toString() ).name(  'lift...'+str[ind/3] ).onFinishChange( function(newVal) {
+                this.object[this.property] = newVal;
+            });
+        }
+        maingui.remember(this.displacementMap.grounding);
+        maingui.remember(this.displacementMap.lifting);
+    }
+
+    //For switching lateral displacement sides every beat or other time period
+    TXgravity.swingX ={
+            enable: true,
+            regular: false,
+            //Which of gravity-type notes to do the swing on
+            //Track separately or together, i.e. can have swing change only on grounding notes,
+            // or only lifting notes. Or respond to both - in which case 'regular' swing always 
+            // responds to both, and for 'irregular', 'together' means that when either
+            // note-type comes in, do the swing, or 'separate' which means each gravity type
+            // tracks and swings separately.
+            gravityType: 'separate', //can be 'grounding, lifting' or 'together' or 'separate'
+            //For 'irregular' swing, i.e. not on every beat, but on every note in a new beat
+                //NOTE I'd like some typedefs here!
+            irrState: {
+                grounding: { prevBeatNum: 0, prevDirec: 1 },
+                lifting:   { prevBeatNum: 0, prevDirec: 1 },
+                together:   { prevBeatNum: 0, prevDirec: 1 },
+            },
+    }
+
+    //Return 1 or -1, to multiply lateral displacement
+    TXgravity.getSwingX = function(MX, musicalTiming ){
+        //Swap lateral direction every beat, or every beat where there's a note, etc.
+        //Storing this option in the translation since the MX and TX here are
+        // non-permanent. 
+        //Will probably want to do this going forward when the translator
+        // class code gets revamped
+        var direc = 1; //1 for keep as it is, -1 for swap
+        var gType = this.swingX.gravityType;
+        var perfBeatNumQ = Math.floor(MX.times.perfBeatQ)
+        //console.log('perfBeatNumQ ',perfBeatNumQ);
+        if( this.swingX.enable &&
+            (  gType == 'together' || gType == 'separate' || gType == MX.gravity )
+          )
+        
+        {
+            if( this.swingX.regular ){
+                //swing changes regular with every beat
+                //direc = ( musicalTiming.perfBeatQ % 2 ) == 0 ? 1 : -1;
+                direc = ( perfBeatNumQ % 2 ) == 0 ? 1 : -1;
+            }else{
+                //irregular
+                //this changes direction everytime we start in a different beat,
+                // so e.g. if we hit only on 1 and 3, we'll still swing
+                //get the state we're working with
+                var name = gType == 'together' ? 'together' : MX.gravity;
+                var state = this.swingX.irrState[name];
+                if( state.prevBeatNum != perfBeatNumQ ){
+                    //console.log('swinging! ', this.swingX.prevBeatNum, beatQ);
+                    state.prevDirec *= -1;
+                    state.prevBeatNum = perfBeatNumQ;
+                }
+                direc = state.prevDirec;
+            }
+        }
+        return direc;
+    }
+    
+
+    TXgravity.updateForFrame = function( MX, musicalTiming /* timing of this frame */ ){
         //Handle different variations of MX
         //Seems weird to handle here, have to sort it out.
         //Although since this translation obj gets assigned to an MX
@@ -129,44 +263,49 @@ var TXinit = function(){
         //It has separate params for lateral (x), vertical (y) and forward (z) displacement.
         
         var VX = MX.VXlist[0]; //expecting just one
+
         //For now, all directions start at same time. I suppose at some point
         // we not want them to?
-        var MXstartBeat = MX.times.perfBeatQ; //Use Raw or Quantized???
-        VX.setPerfBeatStart( MXstartBeat ); 
+        //
+        //*** Use Raw or Quantized??? ***
+        //Using Raw for the VX start time, so that if it's called before the master clock
+        // has reached the quantized beat, there' won't be weird issues with negative beat
+        // diffs.
+        //BUT use quantized time to calc nextBeat, otherwise if we're right before the next
+        // beat, it will be chosen as the next beat which isn't what we want, so quantized
+        // beat+1 is what we want.
+        //
+        var MXstartBeat = MX.times.perfBeatRaw; //Raw or quantized? See comments above
+        var nextBeat = Math.floor( MX.times.perfBeatQ + 1.0 );
+        var beatDiff = nextBeat - MXstartBeat;
 
         //Each direction can have a separate end time
         //Lateral is main displacement - always end on the next beat for now
         //0 signifies do nothing
-        var nextBeat = Math.floor( VX.perfBeatStart + 1.0 );
-        var diff = nextBeat - MXstartBeat;
         var perfBeatEnd = [ nextBeat, nextBeat, nextBeat ];
+        VX.setPerfBeatStart( MXstartBeat ); 
         VX.setPerfBeatEnd( perfBeatEnd );
 
-        //Maximum relative displacement in each direction under 'normal' conditions.
-        var sx = 0, sy = 0, sz = 0;
+        //scaleNorm = "scale normal", i.e. how much scaling/offset to do under
+        // normal conditions, i.e. no special musical expression happening. Not
+        // sure about this.
         var beatDiv = MX.firstME.times.beatDiv; //beat div of [0,11]
-        sx = 0.3;
-        sy = 0.1;
-        sz = -0.3;
-        /*
-        if( MX.gravity  == 'grounding'){
-            sx += 0.4;
-            switch( beatDiv ){
-                case(0): sx += 0.4; sy -= 0.2; break;
-                case(6): sx += 0.2; sy -= 0.1; break;
-                sz += 0.25; break; //z moves positive cuz velocity is -z
+        //scaleNorm is an array3
+        var scaleNorm = this.getDisplacement( MX, beatDiv );
+        //console.log('TXgravity beatDiv, scaleNorm, gravity ', beatDiv, " ", scaleNorm, " ", MX.gravity );
 
-            }
-        }else{
-            //gravity == lifting
+        scaleNorm[0] *= this.getSwingX(MX, musicalTiming );
 
-        }*/
-        var scaleNorm = [ sx, sy, sz ]; //just lateral for now
+        scaleNorm[2] *= -1; //Seems we should be able to pass +z for "forwards" here, rather
+                             // than having to reverse its direction
+                            //*NOTE* having be positive, or opposite direction of 'forward'
+                            // makes for some cool loops!
         VX.setScaleNorm( scaleNorm ); 
 
         //Mark MX as done since this is instantaneous and the VX will continue on its own
         MX.isDone = true;
-    }// class TXgravity
+
+    }// TXgravity.updateForFrame
 
 }// function TXinit
 
@@ -184,6 +323,40 @@ export default class ExpressionTranslator{
         this.MXallList = [];
         //Init some translations - will be overhauled later
         TXinit();
+        //after TXinit:
+        this.setupGUI();
+    }
+
+    //Create a separate guif from the one made by sequencer.
+    //For now at least, let's us control it better since can't figure out
+    //how to remove items from a gui, only know how to destroy() whole thing.
+    setupGUI(){
+        if( typeof(this.gui)  != 'undefined' )
+            this.gui.destroy();
+        this.gui = new dat.GUI( guiPresets_TX ); //load JSON-based presets 
+
+        //Trying to change gui placement - no luck so far. See changes in index.html            
+        // this.gui = new DAT.GUI( {autoPlace: false });
+        //this.gui.domElement.id = 'guiTX'
+        // var customContainer = $('.moveGUI').append($(gui.domElement));
+        // var customContainer = document.getElementById('canvas');
+        // customContainer.appendChild(gui.domElement);
+        
+        var f = this.gui.addFolder('TX');
+        TXmasterList['gravity'].setupGUI( f, this.gui /*top-level gui for remember()*/ );
+
+        //Get the current preset to load
+        this.gui.revert();
+    }
+
+    guiOpenClose(){
+        //See sequencer.guiOpenClose()
+        if(this.gui.closed){
+            this.gui.open()
+        }
+        else{
+            this.gui.close();
+        }
     }
 
     //Take a new MX isntance from music analysis (or also from elsewher?) 

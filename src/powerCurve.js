@@ -9,6 +9,7 @@
 export class PowerCurve3{
     //Can only pass a1 & b1 and they'll be used for all
     constructor( a1, b1, a2, b2, a3, b3 ){
+        /*
         //If a1 is a string, assumes its "[a1,b1,a2,...]" for stupid gui hack
         //console.log('PCurve ctor: a1 ',a1, 'typeof ', typeof(a1));
         if( typeof(a1) == 'string' ){
@@ -18,8 +19,17 @@ export class PowerCurve3{
             a2=a[2];
             b2=a[3];
             a3=a[4];
-            b3=a[5]; 
-        }else{
+            b3=a[5]; */
+        if( (a1 instanceof Array ) ){
+            var a = a1;
+            a1=a[0];
+            b1=a[1];
+            a2=a[2];
+            b2=a[3];
+            a3=a[4];
+            b3=a[5];            
+        }
+        else{
             //If only pass a1 and b1, then copy
             if( typeof(a2) == 'undefined' ){
                 a2 = a3 = a1;

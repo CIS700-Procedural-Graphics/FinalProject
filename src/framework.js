@@ -42,6 +42,9 @@ function init(callback, update) {
     controls.rotateSpeed = 0.3;
     controls.zoomSpeed = 1.0;
     controls.panSpeed = 2.0;
+    //Stauffer - arrows for key strokes get in the way of using them in guis. Can also
+    // change which keys are used to change view
+    controls.enableKeys = false;
 
     document.body.appendChild(renderer.domElement);
 
@@ -56,6 +59,7 @@ function init(callback, update) {
     framework.scene = scene;
     framework.camera = camera;
     framework.renderer = renderer;
+    framework.orbitControls = controls;
 
     // begin the animation loop
     (function tick() {

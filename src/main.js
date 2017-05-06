@@ -6,6 +6,9 @@ import Framework from './framework'
 //
 import Sequencer from './sequencer.js'
 
+//test
+// import {g_floatListToArray, g_arrayToFloatList} from './utils.js'
+
 // called after the scene loads
 function onLoad(framework) {
   var scene = framework.scene;
@@ -15,7 +18,7 @@ function onLoad(framework) {
   var stats = framework.stats;
   
   // set camera position
-  camera.position.set(0, 20, 20);
+  camera.position.set(-50, 30, 150);
   camera.lookAt(new THREE.Vector3(0,0,0));
   camera.fov = 40;
   camera.updateProjectionMatrix();
@@ -34,11 +37,14 @@ function onLoad(framework) {
   var mesh = new THREE.Mesh(geom, material);
   scene.add( mesh );
   */
-  
+
+  // console.log( g_floatListToArray("1 1.1 2") );
+  // console.log( g_arrayToFloatList( [3, 2, 1] ) );
+
   ////////
   //
   // Create the main sequencer/controller
-  framework.sequencer = new Sequencer( scene, camera );
+  framework.sequencer = new Sequencer( scene, camera, framework.orbitControls );
   //Keyboard event handler for basic midi input.
   //Handled within sequencer
   window.addEventListener('keydown', function(event){
@@ -60,6 +66,7 @@ function onUpdate(framework) {
     //console.log(framework.sequencer);
     var dTime = (msec - framework.prevTime);
     framework.prevTime = msec;
+    //NOTE typical dTime here is 15-20, even when skipping call to nextFrame()
     if( dTime > 8 )
       framework.sequencer.nextFrame( msec );
   }
