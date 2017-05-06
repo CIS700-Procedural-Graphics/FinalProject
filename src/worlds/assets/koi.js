@@ -1,12 +1,11 @@
 const THREE = require('three')
 import Asset from './asset'
 import Item from './item'
-const OBJLoader = require('jser-three-obj-loader')(THREE)
 
 // this class will mostly be unchanged from world to world. 
 // variation in worlds will mostly rely on the various assets.
 export default class Koi extends Asset {
-    constructor(scene, timer, world) {
+    constructor(scene, timer, world, assetGeo) {
         super(scene, timer, world);
 
         // add basic cube mesh item as example asset
@@ -21,7 +20,7 @@ export default class Koi extends Asset {
             },
             light_vec: {
                 type: "v3",
-                value: new THREE.Vector3(world.light.position.x, world.light.position.y, world.light.position.z)
+                value: new THREE.Vector3(this.world.light.position.x, this.world.light.position.y, this.world.light.position.z)
             },
         };
 
@@ -31,25 +30,32 @@ export default class Koi extends Asset {
             fragmentShader: require('./assetShaders/koi-frag.glsl')
         });
 
-        // load koi obj 
-        var koiGeo; 
-        // var objLoader = new THREE.OBJLoader();
-        // objLoader.load('house.obj', function(obj) {
-        //     var koiGeo = obj.children[0].geometry;
-        // });
 
-        koiGeo = new THREE.BoxGeometry(0.5, 0.5, 1.0);
-
-        var mesh = new THREE.Mesh(koiGeo, this.material);
-        // mesh.position.set(10, 30, 0); 
-        // mesh.scale.set(10,10,100); 
-
+        var mesh = new THREE.Mesh(assetGeo, this.material);
+        mesh.rotation.y = Math.PI / 2.0; 
+        //var mesh = new THREE.Mesh(assetGeo, new THREE.MeshBasicMaterial( {color: 0xffffff }));
+        setAbsolutePosition(mesh, 0, -0.17, 0);
         var koiItem = new Item(mesh);
 
         // The asset class must have a normal and a vertex assigned before alignment can occur
         // Make sure to call updateRotations from the asset class to update the item rotations
-        // koiItem.localRotation = new THREE.Vector3(90, 45, 0);
+        // koiItem.localPosition = new THREE.Vector3(0, 0, 0);
 
         this.items.push(koiItem);
     }
+    
+}
+
+function resetTransform(mesh) {
+    mesh.updateMatrix();
+    mesh.geometry.applyMatrix( mesh.matrix );
+    mesh.position.set( 0, 0, 0 );
+    mesh.rotation.set( 0, 0, 0 );
+    mesh.scale.set( 1, 1, 1 );
+    mesh.updateMatrix();
+}
+
+function setAbsolutePosition(mesh, x, y, z) {
+    mesh.position.set(x, y, z);
+    resetTransform(mesh);
 }

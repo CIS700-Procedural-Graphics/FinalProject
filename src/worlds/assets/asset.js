@@ -26,16 +26,26 @@ export default class Asset {
     }
 
     // adds all item meshes
-    addToScene() {
+    show() {
       for (var i = 0; i < this.items.length; i++) {
         this.scene.add(this.items[i].mesh);
+        if (this.items[i].mesh.material.uniforms) {
+          if (this.items[i].mesh.material.uniforms.alpha) {
+            this.items[i].mesh.material.uniforms.alpha.value = 0.9;
+          }
+        }
       }
     }
 
     // remove all meshes (in an optional timed interval)
-    deleteFromScene() {
+    hide() {
       for (var i = 0; i < this.items.length; i++) {
         this.scene.remove(this.items[i].mesh);
+        if (this.items[i].mesh.material.uniforms) {
+          if (this.items[i].mesh.material.uniforms.alpha) {
+            this.items[i].mesh.material.uniforms.alpha.value = 0.0;
+          }
+        }
       }
     }
 
@@ -54,7 +64,7 @@ export default class Asset {
 
     // sets the overall asset position and moves the items accordingly
     setScale(scale) {
-      this.scale = scale;
+      this.scale = new THREE.Vector3(scale, scale, scale);
       this.updateScales();
     }
 
@@ -90,12 +100,12 @@ export default class Asset {
 
     // updates the time for the shaders for the item meshes
     updateShaderUniforms() {
-      var delta = this.timer.getDelta();
       for (var i = 0; i < this.items.length; i++) {
         var shader = this.items[i].mesh.material;
+
         if (shader.uniforms !== undefined) {
           if (shader.uniforms.time !== undefined) {
-            shader.uniforms.time.value += delta;
+            shader.uniforms.time.value = this.timer.elapsedTime;
           }
         }
       }
@@ -103,6 +113,7 @@ export default class Asset {
 
     // can override / update this function for each asset
     tick() {
+      this.updatePositions();
       this.updateShaderUniforms();
     }
 }
