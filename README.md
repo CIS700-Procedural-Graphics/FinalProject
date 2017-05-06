@@ -1,3 +1,9 @@
+# Notes
+
+I could not get npm run deploy to work.
+
+If you run the code, you'll need to use Chrome which has Web MIDI API, and you'll need a midi synthesizer connected to whatever the default port is that Web MIDI chooses. I use SimpleSynth, a software synth for Mac.
+
 # Introduction
 
 I've built a relatively simple musical rhythm visualizer. The musical rhythm is generated from simple live input from the computer keyboard and also from hard-coded rhythms played by a simple looper. The rhythm is interpreted using a simple musical analysis model of what I'm calling 'gravity' for now, and the results are applied to generation of an impulse-response curve that drives the motion of a multi-segmented 'tail' modeled using a spring-mass-damper simulation. Particle effects are created in various ways based on the motion of the tail.
