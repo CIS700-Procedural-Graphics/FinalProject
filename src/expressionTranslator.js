@@ -2,7 +2,7 @@
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about this much
 //import DAT from 'dat-gui'
 //Newer version of dat-gui fixes presets bug
-import dat from '../../dat-gui-git/dat.gui.npm/build/dat.gui.js'
+import dat from './dat.gui.js' //copied to src dir for submission
 
 
 //Expression Translator

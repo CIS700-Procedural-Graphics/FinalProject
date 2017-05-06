@@ -2,10 +2,10 @@
 "use strict";
 
 const THREE = require('three'); // older modules are imported like this. You shouldn't have to worry about 
-import dat from '../../dat-gui-git/dat.gui.npm/build/dat.gui.js'
+import dat from './dat.gui.js' //copied to src dir for submission
 import {VisualExpressionSuper} from "./visualExpressionSuper.js"
 import {g_VXmanager} from "./VXmanager.js"
-import {elasticTail} from "../../elasticTail/src/elasticTail.js"
+import {elasticTail} from "./elasticTail.js" //copied to src for submission
 import {ParticlesManager} from './particles.js'
 import {guiPresets_TailParticles} from './guiPresets.js'
 
