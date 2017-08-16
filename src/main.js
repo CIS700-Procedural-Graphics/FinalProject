@@ -18,12 +18,13 @@ OBJLoader(THREE);
 
 var RAND = require('random-seed').create(Math.random());
 var Pi = 3.14;
+var interlayerwalkwaypos = new THREE.Vector3(0,0,0);
 
 //------------------------------------------------------------------------------
 
 var generalParameters = {
   Collisions: false,
-  Fog: false,
+  Fog: true,
   FogDensity: 0.01,
   fog_Col: new THREE.Color(0xd5ddea),
   voxelsize: 0.25,
@@ -262,11 +263,18 @@ function setupLightsandSkybox(scene, camera, renderer)
 	directionalLight.position.multiplyScalar(10);
 	scene.add(directionalLight);
 
-	renderer.setClearColor( 0x000000 );
+	if(generalParameters.Fog)
+	{
+		renderer.setClearColor( generalParameters.fog_Col );
+	}
+	else
+	{
+		renderer.setClearColor( 0x000000 );
+	}
 
 	// set camera position
-	camera.position.set(50, 100, 50);
-	camera.lookAt(new THREE.Vector3(50,0,50));
+	camera.position.set(33, 7, 50);
+	camera.lookAt(new THREE.Vector3(50,5,50));
 }
 
 function onreset( scene )
@@ -1128,6 +1136,14 @@ function interLayerWalkways(walkway)
 	removeRandomPaths(verts);
 	removeIntersectingPaths(verts);
 	createInterConnectingWalkWays(verts, walkway);
+
+	if(verts.length>0)
+	{
+		var vec = new THREE.Vector3(0,0,0).subVectors(verts[1],verts[0]).normalize().multiplyScalar(10);
+		interlayerwalkwaypos.x = verts[0].x - vec.x;
+		interlayerwalkwaypos.y = verts[0].y - vec.y;
+		interlayerwalkwaypos.z = verts[0].z - vec.z;
+	}	
 }
 
 function create3DMap(scene)
@@ -1397,6 +1413,30 @@ function onLoad(framework)
 	create3DMap(scene);
 	createTerrain(scene);
 	setMaterialValues();
+
+	// cinematic setting of camera position
+	//camera position near the base of an interlayer walkway
+	var y = 20*(levelLayers.length-2) + 7;
+	// var slabcenter = levelLayers[levelLayers.length-2].cellList[0].center;
+	camera.position.set(interlayerwalkwaypos.x, interlayerwalkwaypos.y+7, interlayerwalkwaypos.z);
+
+	//look at centeroid of all slabs
+	var centroid = new THREE.Vector3(0,0,0);
+	var count = 0;
+	for(var i=0; i<levelLayers.length; i++)
+	{
+		var level = levelLayers[i];
+		for(var j=0; j<level.cellList.length; j++)
+		{
+			centroid.add(level.cellList[j].center);
+			count++;
+		}
+	}
+	centroid.divideScalar(count);
+
+	var lookat = new THREE.Vector3(centroid.x,centroid.y,centroid.z);
+	camera.lookAt(lookat);
+	framework.controls.target.set(lookat.x, lookat.y, lookat.z);
 }
 
 // called on frame updates
