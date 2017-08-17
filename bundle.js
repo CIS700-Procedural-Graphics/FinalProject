@@ -42,7 +42,7 @@
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
@@ -54,55 +54,81 @@
 	
 	var _datGui2 = _interopRequireDefault(_datGui);
 	
-	var _cell = __webpack_require__(8);
+	var _player = __webpack_require__(8);
+	
+	var _player2 = _interopRequireDefault(_player);
+	
+	var _cell = __webpack_require__(9);
 	
 	var _cell2 = _interopRequireDefault(_cell);
 	
-	var _voronoiPoint = __webpack_require__(9);
+	var _voronoiPoint = __webpack_require__(10);
 	
 	var _voronoiPoint2 = _interopRequireDefault(_voronoiPoint);
 	
+	var _layer = __webpack_require__(11);
+	
+	var _layer2 = _interopRequireDefault(_layer);
+	
+	var _walkwaylayer = __webpack_require__(12);
+	
+	var _walkwaylayer2 = _interopRequireDefault(_walkwaylayer);
+	
+	var _gridcell = __webpack_require__(13);
+	
+	var _gridcell2 = _interopRequireDefault(_gridcell);
+	
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 	
-	//skybox images from: https://github.com/simianarmy/webgl-skybox/tree/master/images
+	//simplex noise function: https://www.npmjs.com/package/simplex-noise
+	//terrain generation: http://www.redblobgames.com/maps/terrain-from-noise/
 	
 	var THREE = __webpack_require__(6); // older modules are imported like this. You shouldn't have to worry about this much
 	
-	var OBJLoader = __webpack_require__(10);
+	var OBJLoader = __webpack_require__(14);
+	var textureLoader = new THREE.TextureLoader();
 	
 	OBJLoader(THREE);
 	
 	//------------------------------------------------------------------------------
 	
-	var RAND = __webpack_require__(11).create(Math.random());
+	var RAND = __webpack_require__(15).create(Math.random());
 	var Pi = 3.14;
+	var interlayerwalkwaypos = new THREE.Vector3(0, 0, 0);
 	
 	//------------------------------------------------------------------------------
 	
 	var generalParameters = {
 		Collisions: false,
-		voxelsize: 0.45
-	};
+		Fog: true,
+		FogDensity: 0.01,
+		fog_Col: new THREE.Color(0xd5ddea),
+		voxelsize: 0.25,
+		maxInstanceCount: 200000
 	
-	var map2D = {
-		numberOfCells: 30,
-		connectivity: 0.3,
+		// var fogParameters = {
+		// 	color: new THREE.Color(0x000000)
+		// }
+	
+	};var map2D = {
+		numberOfCells: 10,
+		connectivity: 0.68,
 		roomSizeMin: 2.0, //controls min of width and length of rooms
 		roomSizeMax: 3.0, //controls max of width and length of rooms
-		walkWayWidth: 4.0,
-		crumbleStatus: 0.5
+		walkWayWidth: 2.5,
+		crumbleStatus: 0.83
 	};
 	
 	var level3D = {
-		numberOfLayers: 5,
-		connectivity: 0.3
-	};
+		numberOfLayers: 2,
+		connectivity: 0.61
 	
-	var floor_Material = new THREE.ShaderMaterial({
+		//material for slab below mountains
+	};var slabMat = new THREE.ShaderMaterial({
 		uniforms: {
-			image1: { // Check the Three.JS documentation for the different allowed types and values
-				type: "t",
-				value: THREE.ImageUtils.loadTexture('./images/ground1.jpg')
+			albedo: {
+				type: "v3",
+				value: new THREE.Vector3(35.0 / 255.0, 70.0 / 255.0, 175.0 / 255.0)
 			},
 			ambientLight: {
 				type: "v3",
@@ -110,22 +136,83 @@
 			},
 			lightVec: {
 				type: "v3",
+				value: new THREE.Vector3(1, 2, 3)
+			},
+			camPos: {
+				type: "v3",
 				value: new THREE.Vector3(10, 10, 10)
+			},
+			fogSwitch: {
+				type: "f",
+				value: 0
+			},
+			fogColor: {
+				type: "v3",
+				value: new THREE.Vector3(0.5, 0.5, 0.5)
+			},
+			fogDensity: {
+				type: "f",
+				value: 0.1
+			},
+			rimColor: {
+				type: "v3",
+				value: new THREE.Vector3(0.1, 0.1, 0.1)
 			}
 		},
-		vertexShader: __webpack_require__(13),
-		fragmentShader: __webpack_require__(14)
+		vertexShader: __webpack_require__(17),
+		fragmentShader: __webpack_require__(18),
+		side: THREE.DoubleSide
 	});
 	
-	var walkwayGeo = new THREE.InstancedBufferGeometry();
-	var walkwayMesh = new THREE.Mesh();
+	// material for instanced objects
+	var pathMat = new THREE.RawShaderMaterial({
+		uniforms: {
+			image1: { // Check the Three.JS documentation for the different allowed types and values
+				type: "t",
+				value: THREE.ImageUtils.loadTexture('./images/tex_nor_maps/path/TilingStone1.jpg')
+			},
+			ambientLight: {
+				type: "v3",
+				value: new THREE.Vector3(0.1, 0.1, 0.1)
+			},
+			lightVec: {
+				type: "v3",
+				value: new THREE.Vector3(1, 1, 1)
+			},
+			camPos: {
+				type: "v3",
+				value: new THREE.Vector3(10, 10, 10)
+			},
+			fogSwitch: {
+				type: "f",
+				value: 0
+			},
+			fogColor: {
+				type: "v3",
+				value: new THREE.Vector3(0.5, 0.5, 0.5)
+			},
+			fogDensity: {
+				type: "f",
+				value: 0.1
+			},
+			rimColor: {
+				type: "v3",
+				value: new THREE.Vector3(0.1, 0.1, 0.1)
+			}
+		},
+		vertexShader: __webpack_require__(19),
+		fragmentShader: __webpack_require__(20),
+		side: THREE.DoubleSide
+	});
 	
 	//------------------------------------------------------------------------------
-	var LevelLayers = []; //list of 2D Layers
 	
-	var walkway = []; //holds a list of voxels -- so positions
-	var cellList = []; //holds a list of cells -- so rooms/slabs
-	var voronoi = []; //helps create voronoi pattern graph
+	var directionalLight;
+	var levelLayers = []; //list of 2D Layers
+	var grid = new Uint8Array(17600000); //could be more efficient if it was a array of bits
+	var connectingWalkways = []; //list of walkwaylayers connecting
+	//grid indexing scheme: index = currIndy*gridsize*gridsize + currIndx*gridsize + currIndz;
+	var gridsize = new THREE.Vector3(200, 440, 200); //max dimensions of scene
 	
 	//------------------------------------------------------------------------------
 	
@@ -135,11 +222,11 @@
 		};
 	};
 	
-	function changeGUI(gui, camera, scene) {
+	function changeGUI(gui, camera, scene, renderer) {
 		var tweaks = gui.addFolder('Tweaks');
 	
 		var level3DFolder = tweaks.addFolder('3D Level parameters');
-		level3DFolder.add(level3D, 'numberOfLayers', 3, 10).step(1).onChange(function (newVal) {});
+		level3DFolder.add(level3D, 'numberOfLayers', 1, 5).step(1).onChange(function (newVal) {});
 		level3DFolder.add(level3D, 'connectivity', 0.1, 1.0).onChange(function (newVal) {});
 	
 		var map2DFolder = tweaks.addFolder('2D Layer parameters');
@@ -148,11 +235,63 @@
 		map2DFolder.add(map2D, 'roomSizeMax', 1.1, 5.0).onChange(function (newVal) {});
 		map2DFolder.add(map2D, 'connectivity', 0.1, 0.9).onChange(function (newVal) {});
 		map2DFolder.add(map2D, 'walkWayWidth', 2.0, 6.0).onChange(function (newVal) {});
-		map2DFolder.add(map2D, 'crumbleStatus', 0.0, 1.0).onChange(function (newVal) {
-			map2D.crumbleStatus = 0.3 + 0.5 * map2D.crumbleStatus;
+		map2DFolder.add(map2D, 'crumbleStatus', 0.35, 0.9).onChange(function (newVal) {
+			map2D.crumbleStatus = map2D.crumbleStatus;
 		});
 	
-		gui.add(generalParameters, 'Collisions').onChange(function (newVal) {});
+		var fog = tweaks.addFolder('Fog');
+		fog.add(generalParameters, 'Fog').onChange(function (newVal) {
+	
+			if (newVal) {
+				renderer.setClearColor(generalParameters.fog_Col);
+			} else {
+				renderer.setClearColor(0x000000);
+			}
+	
+			pathMat.uniforms.fogSwitch.value = newVal;
+			slabMat.uniforms.fogSwitch.value = newVal;
+			for (var i = 0; i < levelLayers.length; i++) {
+				if (levelLayers[i].instancedWalkwayMaterial.uniforms.fogSwitch) {
+					levelLayers[i].instancedWalkwayMaterial.uniforms.fogSwitch.value = newVal;
+				}
+			}
+	
+			//terrain
+			for (var i = 0; i < levelLayers.length; i++) {
+				for (var j = 0; j < levelLayers[i].cellList.length; j++) {
+					var cell = levelLayers[i].cellList[j];
+					if (cell.mountainMaterial.uniforms.fogSwitch) {
+						cell.mountainMaterial.uniforms.fogSwitch.value = newVal;
+					}
+				}
+			}
+		});
+	
+		fog.add(generalParameters, 'FogDensity', 0.0001, 0.15).onChange(function (newVal) {
+			pathMat.uniforms.fogDensity.value = newVal;
+			slabMat.uniforms.fogDensity.value = newVal;
+			for (var i = 0; i < levelLayers.length; i++) {
+				if (levelLayers[i].instancedWalkwayMaterial.uniforms.fogDensity) {
+					levelLayers[i].instancedWalkwayMaterial.uniforms.fogDensity.value = newVal;
+				}
+			}
+	
+			//terrain
+			for (var i = 0; i < levelLayers.length; i++) {
+				for (var j = 0; j < levelLayers[i].cellList.length; j++) {
+					var cell = levelLayers[i].cellList[j];
+					if (cell.mountainMaterial.uniforms.fogDensity) {
+						cell.mountainMaterial.uniforms.fogDensity.value = newVal;
+					}
+				}
+			}
+		});
+	
+		// fog.add(fogParameters, 'color', ).onChange(function(newVal) {
+		// 	generalParameters.fog_Col = color;
+		// });
+	
+		// gui.add(generalParameters, 'Collisions').onChange(function(newVal) {});
 	
 		var text = new TextActions(scene);
 		gui.add(text, 'NewLevel');
@@ -160,32 +299,29 @@
 	
 	function setupLightsandSkybox(scene, camera, renderer) {
 		// Set light
-		var directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+		directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 		directionalLight.color.setHSL(0.1, 1, 0.95);
-		directionalLight.position.set(1, 3, 2);
+		directionalLight.position.set(0, 1, 0);
 		directionalLight.position.multiplyScalar(10);
 		scene.add(directionalLight);
-		floor_Material.lightVec = directionalLight.position;
 	
-		// set skybox
-		var loader = new THREE.CubeTextureLoader();
-		var urlPrefix = 'images/skymap/';
-		var skymap = new THREE.CubeTextureLoader().load([urlPrefix + 'px.jpg', urlPrefix + 'nx.jpg', urlPrefix + 'py.jpg', urlPrefix + 'ny.jpg', urlPrefix + 'pz.jpg', urlPrefix + 'nz.jpg']);
-		//scene.background = skymap;
-	
-		renderer.setClearColor(0xbfd1e5);
-		scene.add(new THREE.AxisHelper(20));
+		if (generalParameters.Fog) {
+			renderer.setClearColor(generalParameters.fog_Col);
+		} else {
+			renderer.setClearColor(0x000000);
+		}
 	
 		// set camera position
-		camera.position.set(50, 100, 50);
-		camera.lookAt(new THREE.Vector3(50, 0, 50));
+		camera.position.set(33, 7, 50);
+		camera.lookAt(new THREE.Vector3(50, 5, 50));
 	}
 	
 	function onreset(scene) {
 		cleanscene(scene);
-		spawn2DCells(scene);
-		scene.add(lineSeg);
-		createGraph(scene);
+		initgrid();
+		create3DMap(scene);
+		createTerrain(scene);
+		setMaterialValues();
 	}
 	
 	function cleanscene(scene) {
@@ -194,13 +330,19 @@
 			var obj = scene.children[i];
 			scene.remove(obj);
 		}
+	
+		//remove instanced objects separately, cause threejs's scene doesn't contain it as a child
+		for (var i = 0; i < levelLayers.length; i++) {
+			scene.remove(levelLayers[i].instancedWalkway);
+		}
 	}
 	
 	//------------------------------------------------------------------------------
 	
-	function initwalkwayGeo(scene) {
+	function initwalkwayGeo(scene, walkwayGeo, walkwayMat) {
+		//define and set attributes of the instanced walkway
 		// geometry
-		var instances = 65000;
+		var instances = generalParameters.maxInstanceCount;
 		// per mesh data
 		var vertices = new THREE.BufferAttribute(new Float32Array([
 		// Front
@@ -216,6 +358,22 @@
 		// Bottom
 		1, -1, 1, -1, -1, 1, 1, -1, -1, -1, -1, -1]), 3);
 		walkwayGeo.addAttribute('position', vertices);
+	
+		var normals = new THREE.BufferAttribute(new Float32Array([
+		// Front
+		0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+		// Back
+		0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+		// Left
+		-1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+		// Right
+		1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+		// Top
+		0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+		// Bottom
+		0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0]), 3);
+		walkwayGeo.addAttribute('normal', normals);
+	
 		var uvs = new THREE.BufferAttribute(new Float32Array([
 		//x	y	z
 		// Front
@@ -248,46 +406,43 @@
 		}
 		walkwayGeo.addAttribute('offset', offsets); // per mesh translation
 	
+		//scale cubes that form walkway
 		walkwayGeo.scale(generalParameters.voxelsize, generalParameters.voxelsize, generalParameters.voxelsize);
 	
-		// material
-		var voxelMat = new THREE.RawShaderMaterial({
-			vertexShader: __webpack_require__(15),
-			fragmentShader: __webpack_require__(16),
-			side: THREE.DoubleSide,
-			transparent: false
-		});
+		//creating bounding sphere
+		var boundingSphereCenter = new THREE.Vector3(0, 0, 0);
+		var boundingSphereRadius = 300;
+		walkwayGeo.boundingSphere = new THREE.Sphere(boundingSphereCenter, boundingSphereRadius);
 	
-		walkwayMesh = new THREE.Mesh(walkwayGeo, voxelMat);
-		scene.add(walkwayMesh);
+		//create mesh
+		return new THREE.Mesh(walkwayGeo, walkwayMat);
 	}
 	
-	function setWalkWayVoxels() {
+	function setWalkWayVoxels(walkwayMesh, walkway) {
 		var offsets = walkwayMesh.geometry.getAttribute("offset");
 		walkwayMesh.geometry.maxInstancedCount = walkway.length;
-		var vector = new THREE.Vector4();
 	
 		for (var i = 0; i < walkway.length; i++) {
 			var x = walkway[i].x;
 			var y = walkway[i].y;
 			var z = walkway[i].z;
-			vector.set(x, y, z, 0);
-			offsets.setXYZ(i, vector.x, vector.y, vector.z);
+			offsets.setXYZ(i, x, y, z);
 		}
 	}
 	
 	//------------------------------------------------------------------------------
 	
-	function cellCreateHelper(centx, centz, w, l, flag, spacing) {
+	function cellCreateHelper(cellList, centx, centz, w, l, flag, spacing) {
 		var size = cellList.length;
 		if (size != 0) {
 			var currRadius = Math.sqrt(w * w + l * l) * 0.5;
 			var counter = 0;
 	
 			for (var j = 0; j < size; j++) {
-				var cent = new THREE.Vector3(centx, 0.0, centz);
+				var cent = new THREE.Vector2(centx, centz);
+				var cent2 = new THREE.Vector2(cellList[j].center.x, cellList[j].center.z);
 				var r = cellList[j].radius;
-				var currdist = cent.distanceTo(cellList[j].center);
+				var currdist = cent.distanceTo(cent2);
 	
 				if (currdist > currRadius + r + spacing) {
 					counter++;
@@ -304,9 +459,7 @@
 		return true;
 	}
 	
-	function spawn2DCells(scene) {
-	
-		cellList = [];
+	function spawn2DCells(scene, cellList, floorHeight) {
 		var count = 0;
 		var count1 = 0;
 		var roomscale = 2.8;
@@ -327,23 +480,25 @@
 			var l = (map2D.roomSizeMin + RAND.random() * (map2D.roomSizeMax - map2D.roomSizeMin)) * roomscale;
 	
 			//loop through other cells to see if there is an overlap --> sample and rejection technique
-			flag_create = cellCreateHelper(centx, centz, w, l, flag_create, spacing);
+			flag_create = cellCreateHelper(cellList, centx, centz, w, l, flag_create, spacing);
 	
 			if (flag_create) {
 				count++;
 				var box_geo = new THREE.BoxGeometry(w * 2.0, 1, l * 2.0);
-				// var box_geo = new THREE.BoxGeometry( w*2.0, 0.00001, l*2.0 );			
-				var slab = new THREE.Mesh(box_geo, floor_Material);
+				var slab = new THREE.Mesh(box_geo, slabMat);
 	
-				var cent = new THREE.Vector3(centx, 0.0, centz);
+				var cent = new THREE.Vector3(centx, floorHeight, centz);
 	
 				var cell = new _cell2.default("undetermined", cent, w, l, slab);
+				// cell.emptyslots(map2D.numslots);
 				cellList.push(cell);
 				cellList[cellList.length - 1].drawCell(scene);
 			}
 		}
-		console.log("number of cells: " + map2D.numberOfCells);
-		console.log("number of cells drawn: " + cellList.length);
+	
+		//To display the number of cells created and drawn per layer, uncomment below
+		// console.log("number of cells: " + map2D.numberOfCells);
+		// console.log("number of cells drawn: " + cellList.length);
 	}
 	
 	//------------------------------------------------------------------------------
@@ -384,7 +539,6 @@
 	
 	
 				if (betweenPoints(pt, p1, p2) && betweenPoints(pt, q1, q2)) {
-	
 					//lines intersect
 					//delete one of them
 					linePoints.splice(j, 2);
@@ -407,7 +561,7 @@
 		}
 	}
 	
-	function removeRandomLines() {
+	function removeRandomLines(voronoi) {
 		for (var i = 0; i < voronoi.length; i++) {
 			var cell = voronoi[i];
 			for (var j = 1; j < voronoi[i].edgeEndPoints.length; j++) {
@@ -418,7 +572,7 @@
 		}
 	}
 	
-	function createWalkWays(pathPoints) {
+	function createWalkWays(pathPoints, walkway, height) {
 		//draw planes instead of line segments that represent walk ways
 		for (var i = 0; i < pathPoints.length; i = i + 2) {
 			var p1 = pathPoints[i];
@@ -436,19 +590,23 @@
 	
 			//create voxelized walkways; will look cooler than solid planes
 			for (var j = 0; j < numcurvepoints; j++) {
-				var curvepos = new THREE.Vector3(curvegeo.vertices[j].x, 0.0, curvegeo.vertices[j].y);
+				var curvepos = new THREE.Vector3(curvegeo.vertices[j].x, height, curvegeo.vertices[j].y);
 				var up = new THREE.Vector3(0.0, 1.0, 0.0);
 				var forward = new THREE.Vector3(curvegeo.vertices[j + 1].x - curvegeo.vertices[j].x, 0.0, curvegeo.vertices[j + 1].y - curvegeo.vertices[j].y).normalize();
 				var left = new THREE.Vector3(up.x, up.y, up.z).normalize();
 				left.cross(forward).normalize();
 	
-				for (var k = -w * 0.5; k <= w * 0.5; k++) {
-					if (map2D.crumbleStatus > RAND.random()) {
+				for (var k = -w * 0.5; k <= w * 0.5; k = k + stepsize * 1.1) {
+					if (RAND.random() > map2D.crumbleStatus) {
 						var perpPos = new THREE.Vector3(curvepos.x, curvepos.y, curvepos.z);
 						var temp = new THREE.Vector3(left.x, left.y, left.z);
 						perpPos.x += temp.x * k;
 						perpPos.z += temp.z * k;
 						walkway.push(perpPos);
+	
+						//fill grid
+						// console.log("grid cell filled");
+						fillGridCell(perpPos);
 					}
 				}
 			}
@@ -473,13 +631,12 @@
 		}
 	}
 	
-	function createGraph(scene) {
+	function createGraph(scene, cellList, voronoi, walkway, height) {
 		//sort cellList by the centers of the cells, sort centers by x (if equal use z)
 		cellList.sort(compareCells);
 	
 		//Fake Cheap Traingular Voronoi
 		//create a triangle from the first three points in the cellList. This is the beginning of the fake voronoi
-	
 		var v1 = new _voronoiPoint2.default(cellList[0].center, cellList[1].center, cellList[2].center);
 		var v2 = new _voronoiPoint2.default(cellList[1].center, cellList[2].center, cellList[0].center);
 		var v3 = new _voronoiPoint2.default(cellList[2].center, cellList[0].center, cellList[1].center);
@@ -524,7 +681,7 @@
 		//(a list of points that together with the vertex of the voronoi element form an edge)
 	
 		//draw the edges to visualize it
-		removeRandomLines(); //so not everything is connected
+		removeRandomLines(voronoi); //so not everything is connected
 	
 		var verts = [];
 		for (var i = 0; i < voronoi.length; i++) {
@@ -535,14 +692,536 @@
 		}
 	
 		removeIntersectingLines(verts);
-		createWalkWays(verts);
+		createWalkWays(verts, walkway, height);
 	
-		console.log("number of walkways: " + verts.length * 0.5);
+		// console.log("number of walkways: " + verts.length*0.5);
+	}
+	
+	//------------------------------------------------------------------------------
+	//Was using the grid and its related functions for intersections and collisions but it takes too much memory, try a kd tree
+	function initgrid() {
+		grid = new Uint8Array(17600000);
+	}
+	
+	function fillGridCell(pos) {
+		//pass in position of voxel; if used to store 
+		var indx = Math.floor(pos.x * 2); //Uint8 level 
+		var indy = Math.floor(pos.y * 2); //Uint8 level
+		var indz = Math.floor(pos.z * 2); //Uint8 level
+	
+		var index = indy * gridsize.x * gridsize.z + indx * gridsize.z + indz;
+		var minpos = new THREE.Vector3(indx * 200, indy * 440, indz * 200);
+		var diff = new THREE.Vector3(pos.x - minpos.x, pos.y - minpos.y, pos.z - minpos.z);
+	
+		var indbitx = Math.floor(diff.x / 2); //8 bit level
+		var indbity = Math.floor(diff.y / 2); //8 bit level
+		var indbitz = Math.floor(diff.z / 2); //8 bit level
+	
+		grid[index] = 0;
+	
+		if (indbity == 1) {
+			if (indbitx == 1) {
+				if (indbitz == 1) {
+					grid[index] = grid[index] + 128; //top, right, front
+				} else {
+					grid[index] = grid[index] + 64; //top, right, back
+				}
+			} else {
+				if (indbitz == 1) {
+					grid[index] = grid[index] + 32; //top, left, front
+				} else {
+					grid[index] = grid[index] + 16; //top, left, back
+				}
+			}
+		} else {
+			if (indbitx == 1) {
+				if (indbitz == 1) {
+					grid[index] = grid[index] + 8; //back, right, front
+				} else {
+					grid[index] = grid[index] + 4; //back, right, back
+				}
+			} else {
+				if (indbitz == 1) {
+					grid[index] = grid[index] + 2; //back, left, front
+				} else {
+					grid[index] = grid[index] + 1; //back, left, back
+				}
+			}
+		}
+	}
+	
+	function queryGridCell(pos) {
+		//pass in position of voxel; if used to store 
+		var indx = Math.floor(pos.x * 2); //Uint8 level 
+		var indy = Math.floor(pos.y * 2); //Uint8 level
+		var indz = Math.floor(pos.z * 2); //Uint8 level
+	
+		var index = indy * gridsize.x * gridsize.z + indx * gridsize.z + indz;
+		var retVal = grid[index];
+	
+		return retVal;
 	}
 	
 	//------------------------------------------------------------------------------
 	
-	function create3DMap() {}
+	function pathShifting(c1, c2, currCell, toCell) {
+		var p1 = new THREE.Vector3(c1.x, c1.y, c1.z);
+		var w1 = currCell.cellWidth;
+		var l1 = currCell.cellLength;
+		var p2 = new THREE.Vector3(c2.x, c2.y, c2.z);
+		var w2 = toCell.cellWidth;
+		var l2 = toCell.cellLength;
+	
+		var offset = map2D.walkWayWidth * 0.3;
+	
+		if (c2.x > c1.x) {
+			//ToCell is to the right of the currCell
+			p2.x = p2.x - w2 + offset;
+			p1.x = p1.x + w1 - offset;
+		} else {
+			//ToCell is to the left of the currCell
+			p2.x = p2.x + w2 - offset;
+			p1.x = p1.x - w1 + offset;
+		}
+	
+		if (c2.z < c1.z) {
+			//ToCell is infront(if measured along z axis) of the currCell
+			p2.z = p2.z + l2 - offset;
+			p1.z = p1.z - l1 + offset;
+		} else {
+			//ToCell is behind(if measured along z axis) the currCell
+			p2.z = p2.z - l2 + offset;
+			p1.z = p1.z + l1 - offset;
+		}
+	
+		c1.x = p1.x;
+		c1.z = p1.z;
+		c2.x = p2.x;
+		c2.z = p2.z;
+	}
+	
+	function removeRandomPaths(verts) {
+		for (var i = 0; i < verts.length; i = i + 2) {
+			if (RAND.random() > level3D.connectivity) {
+				verts.splice(i, 2);
+			}
+		}
+	}
+	
+	function f_equals(a, b, epsilon) {
+		if (a > b - epsilon && a < b + epsilon) {
+			return true;
+		}
+		return false;
+	}
+	
+	function removeIntersectingPaths(linePoints) {
+		//reseource: https://math.stackexchange.com/questions/28503/how-to-find-intersection-of-two-lines-in-3d
+		for (var i = 0; i < linePoints.length; i = i + 2) {
+			//convert lines to parametric form
+			var A = new THREE.Vector3(linePoints[i].x, linePoints[i].y, linePoints[i].z);
+			var B = new THREE.Vector3(linePoints[i + 1].x, linePoints[i + 1].y, linePoints[i + 1].z);
+	
+			for (var j = 0; j < linePoints.length; j += 2) {
+				if (i == j) {
+					continue;
+				}
+	
+				var C = new THREE.Vector3(linePoints[j].x, linePoints[j].y, linePoints[j].z);
+				var D = new THREE.Vector3(linePoints[j + 1].x, linePoints[j + 1].y, linePoints[j + 1].z);
+	
+				var s_numerator = (A.y - C.y) * (B.x - A.x) + (C.x - A.x) * (B.y - A.y);
+				var s_denominator = (B.x - A.x) * (D.y - C.y) - (D.x - C.x) * (B.y - A.y);
+	
+				if (f_equals(s_denominator, 0.0, 0.001)) {
+					//lines don't intersect
+					continue;
+				}
+	
+				var s = s_numerator / s_denominator;
+	
+				var t_numerator = C.x - A.x + s * (D.x - C.x);
+				var t_denominator = B.x - A.x;
+	
+				if (f_equals(t_denominator, 0.0, 0.001)) {
+					//lines don't intersect
+					continue;
+				}
+	
+				var t = t_numerator / t_denominator;
+	
+				var eq1 = A.z + t * (B.z - A.z);
+				var eq2 = C.z + s * (D.z - C.z);
+	
+				if (f_equals(eq1, eq2, 0.00001)) {
+					//lines do intersect, so remove one of the lines
+					linePoints.splice(j, 2);
+					j -= 2;
+					// console.log("removed lines");
+				}
+			}
+		}
+	}
+	
+	function repositionPath(p1, p2) {
+		//Doesn't work -- too much memory or computation -- chrome dies
+		//try using a kd tree or a BVH
+		var origin = new THREE.Vector3(p1.x, p1.y, p1.z);
+		var dir = new THREE.Vector3(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z); // backwards ray
+		dir = dir.normalize();
+		var dist = p1.distanceTo(p2);
+	
+		for (var i = dist * 0.85; i <= dist; i = i++) {
+			var pos = new THREE.Vector3(origin.x + i * dir.x, origin.y + i * dir.y, origin.z + i * dir.z);
+	
+			if (queryGridCell(pos) > 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	function createInterConnectingWalkWays(pathPoints, walkway) {
+		//draw planes instead of line segments that represent walk ways
+		for (var i = 0; i < pathPoints.length; i = i + 2) {
+			var p1 = pathPoints[i];
+			var p2 = pathPoints[i + 1];
+	
+			var w = map2D.walkWayWidth;
+	
+			var len = p1.distanceTo(p2);
+			var stepsize = generalParameters.voxelsize;
+			var numcurvepoints = len / stepsize;
+	
+			//Three js is a stupid graphics library --> does not have a get points method for 3d points
+			//hence the stupidity and hackiness below
+			var curve1 = new THREE.SplineCurve([new THREE.Vector2(p1.x, p1.y), new THREE.Vector2(p2.x, p2.y)]);
+	
+			var curve2 = new THREE.SplineCurve([new THREE.Vector2(p1.y, p1.z), new THREE.Vector2(p2.y, p2.z)]);
+	
+			var path1 = new THREE.Path(curve1.getPoints(numcurvepoints + 1));
+			var curvegeo1 = path1.createPointsGeometry(numcurvepoints + 1);
+	
+			var path2 = new THREE.Path(curve2.getPoints(numcurvepoints + 1));
+			var curvegeo2 = path2.createPointsGeometry(numcurvepoints + 1);
+	
+			//create voxelized walkways; will look cooler than solid planes
+			for (var j = 0; j < numcurvepoints; j++) {
+				var curvepos = new THREE.Vector3(curvegeo1.vertices[j].x, curvegeo1.vertices[j].y, curvegeo2.vertices[j].y);
+				var up = new THREE.Vector3(0.0, 1.0, 0.0);
+				var forward = new THREE.Vector3(curvegeo1.vertices[j + 1].x - curvegeo1.vertices[j].x, curvegeo2.vertices[j + 1].x - curvegeo2.vertices[j].x, curvegeo2.vertices[j + 1].y - curvegeo2.vertices[j].y).normalize();
+				var left = new THREE.Vector3(up.x, up.y, up.z).normalize();
+				left.cross(forward).normalize();
+	
+				for (var k = -w * 0.5; k <= w * 0.5; k = k + 1.1 * stepsize) {
+					if (RAND.random() > map2D.crumbleStatus) {
+						var perpPos = new THREE.Vector3(curvepos.x, curvepos.y, curvepos.z);
+						var temp = new THREE.Vector3(left.x, left.y, left.z);
+						perpPos.x += temp.x * k;
+						perpPos.y += temp.y * k;
+						perpPos.z += temp.z * k;
+						walkway.push(perpPos);
+	
+						//fill grid
+						// console.log("grid cell filled");
+						fillGridCell(perpPos);
+					}
+				}
+			}
+		}
+	}
+	
+	function interLayerWalkways(walkway) {
+		var index = 0;
+		var verts = [];
+		//for every n randomly chosen slabs connect them to some other slab in the layer above it
+		for (var i = 0; i < level3D.numberOfLayers - 1; i++) {
+			//for every layer
+			//pick an x number of slabs
+			var minWalkways = 2 + map2D.numberOfCells * 0.1;
+			var maxWalkways = 10;
+			var n = minWalkways + RAND.random() * (minWalkways - 1.8); //level3D.numberOfLayers*map2D.numberOfCells;
+	
+			if (n > maxWalkways) {
+				n = maxWalkways;
+			}
+	
+			for (var j = 0; j < n; j++) {
+				var ind1 = Math.floor(RAND.random() * levelLayers[i].cellList.length);
+				var currCell = levelLayers[i].cellList[ind1];
+	
+				var connectableCells = [];
+				//search in the layers above the cell in some radius
+				//cells to the right and towards the camera; -- add thing for other way too
+				for (var k = i + 1; k < Math.min(i + 2, level3D.numberOfLayers); k++) {
+					for (var m = 0; m < levelLayers[k].cellList.length; m++) {
+						var toCell = levelLayers[k].cellList[m];
+	
+						if (currCell == toCell) {
+							continue;
+						}
+	
+						var dist = currCell.center.distanceTo(toCell.center);
+						var spacing = 12.0;
+						var radius = 23.0 + spacing; //height between layers is 20 and so this has to be greater than 20^2 and then some
+						if (dist > radius) {
+							//create a list of those cells
+							connectableCells.push(toCell);
+						}
+					}
+				}
+	
+				//pick a random cell from that list and connect the original cell to the chosen cell 
+				var ind2 = Math.floor(RAND.random() * connectableCells.length);
+				var toCell = connectableCells[ind2];
+	
+				var p1 = new THREE.Vector3(currCell.center.x, currCell.center.y, currCell.center.z);
+				var p2 = new THREE.Vector3(toCell.center.x, toCell.center.y, toCell.center.z);
+	
+				//figure out which direction they walkway goes in and change p1 and p2 by width or length
+				pathShifting(p1, p2, currCell, toCell);
+	
+				//below code was to remove an edge case where paths intersect with walkways
+				// var conflictingPath = repositionPath(p1, p2);
+				// if( conflictingPath )
+				// {
+				// 	//the path between 2D layers is attaching to a point on a cell 
+				// 	//that has already been taken by a 2D layer walkway; pick another
+				// 	// j--;
+				// 	continue;
+				// }			
+	
+				verts.push(p1);
+				verts.push(p2);
+			}
+		}
+	
+		removeRandomPaths(verts);
+		removeIntersectingPaths(verts);
+		createInterConnectingWalkWays(verts, walkway);
+	
+		if (verts.length > 0) {
+			var vec = new THREE.Vector3(0, 0, 0).subVectors(verts[1], verts[0]).normalize().multiplyScalar(10);
+			interlayerwalkwaypos.x = verts[0].x - vec.x;
+			interlayerwalkwaypos.y = verts[0].y - vec.y;
+			interlayerwalkwaypos.z = verts[0].z - vec.z;
+		}
+	}
+	
+	function create3DMap(scene) {
+		levelLayers.length = 0;
+		var floorOffset = 20;
+		var h = 0;
+		for (var i = 0; i < level3D.numberOfLayers; i++) {
+			//new layer
+			var layer = new _layer2.default();
+	
+			//new set of platforms for layers
+			spawn2DCells(scene, layer.cellList, h);
+			//new set of walkways for layers	
+			createGraph(scene, layer.cellList, layer.voronoi, layer.walkway, h);
+	
+			//new instanced geometry for all of the walkways
+			var geo = new THREE.InstancedBufferGeometry();
+	
+			var mat = new THREE.RawShaderMaterial({
+				uniforms: {
+					ambientLight: {
+						type: "v3",
+						value: new THREE.Vector3(0.2, 0.2, 0.2)
+					},
+					lightVec: {
+						type: "v3",
+						value: new THREE.Vector3(1, 1, 1)
+					},
+					camPos: {
+						type: "v3",
+						value: new THREE.Vector3(10, 10, 10)
+					},
+					fogSwitch: {
+						type: "f",
+						value: 0
+					},
+					fogColor: {
+						type: "v3",
+						value: new THREE.Vector3(0.5, 0.5, 0.5)
+					},
+					fogDensity: {
+						type: "f",
+						value: 0.1
+					},
+					rimColor: {
+						type: "v3",
+						value: new THREE.Vector3(0.5, 0.5, 0.5)
+					},
+					albedo: {
+						type: "v3",
+						value: new THREE.Vector3(RAND.random(), RAND.random(), RAND.random())
+					}
+				},
+				vertexShader: __webpack_require__(21),
+				fragmentShader: __webpack_require__(22),
+				side: THREE.DoubleSide,
+				transparent: false
+			});
+	
+			layer.instancedWalkwayMaterial = mat;
+			layer.instancedWalkway = initwalkwayGeo(scene, geo, layer.instancedWalkwayMaterial);
+			setWalkWayVoxels(layer.instancedWalkway, layer.walkway);
+	
+			//add walkway to scene
+			scene.add(layer.instancedWalkway);
+	
+			//push layer to list of layers
+			levelLayers.push(layer);
+			h = h + floorOffset;
+		}
+	
+		//now connect layers
+		//new geometry and material for between layer connections
+		var geo = new THREE.InstancedBufferGeometry();
+		var mat = pathMat;
+		var walkwayLayer = new _walkwaylayer2.default();
+	
+		interLayerWalkways(walkwayLayer.walkway);
+	
+		walkwayLayer.instancedWalkway = initwalkwayGeo(scene, geo, mat);
+		setWalkWayVoxels(walkwayLayer.instancedWalkway, walkwayLayer.walkway);
+	
+		//add walkway to scene
+		scene.add(walkwayLayer.instancedWalkway);
+	}
+	
+	//------------------------------------------------------------------------------
+	
+	function createTerrain(scene) {
+		for (var i = 0; i < levelLayers.length; i++) {
+			var level = levelLayers[i];
+			for (var j = 0; j < level.cellList.length; j++) {
+				var cell = level.cellList[j];
+				var center = cell.center;
+				var w = cell.cellWidth;
+				var l = cell.cellLength;
+				var h = 10;
+				var r = cell.radius;
+	
+				var mat = new THREE.ShaderMaterial({
+					uniforms: {
+						ambientLight: {
+							type: "v3",
+							value: new THREE.Vector3(0.2, 0.2, 0.2)
+						},
+						lightVec: {
+							type: "v3",
+							value: new THREE.Vector3(1, 1, 1)
+						},
+						camPos: {
+							type: "v3",
+							value: new THREE.Vector3(10, 10, 10)
+						},
+						fogSwitch: {
+							type: "f",
+							value: 0
+						},
+						fogColor: {
+							type: "v3",
+							value: new THREE.Vector3(0.5, 0.5, 0.5)
+						},
+						fogDensity: {
+							type: "f",
+							value: 0.1
+						},
+						rimColor: {
+							type: "v3",
+							value: new THREE.Vector3(0.1, 0.1, 0.1)
+						},
+						slabCenter: {
+							type: "v3",
+							value: new THREE.Vector3(center.x, center.y, center.z)
+						},
+						width: {
+							type: "f",
+							value: w
+						},
+						length: {
+							type: "f",
+							value: l
+						},
+						slabRadius: {
+							type: "f",
+							value: r * 2.0
+						}
+					},
+					vertexShader: __webpack_require__(23),
+					fragmentShader: __webpack_require__(24),
+					side: THREE.DoubleSide
+				});
+	
+				var plane_geo = new THREE.PlaneGeometry(w * 2.0, l * 2.0, 150, 150);
+				plane_geo.rotateX(0.5 * Pi);
+	
+				cell.mountainMaterial = mat;
+				cell.mountain = new THREE.Mesh(plane_geo, mat);
+				cell.mountain.position.set(center.x, center.y + 0.5, center.z);
+				scene.add(cell.mountain);
+			}
+		}
+	}
+	
+	//------------------------------------------------------------------------------
+	
+	function setMaterialValues() {
+		//interlayer voxels
+		if (pathMat) {
+			pathMat.uniforms.lightVec.value.set(directionalLight.position.x, directionalLight.position.y, directionalLight.position.z);
+	
+			pathMat.uniforms.fogColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+			pathMat.uniforms.rimColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+	
+			pathMat.uniforms.fogDensity.value = generalParameters.FogDensity;
+			pathMat.uniforms.fogSwitch.value = generalParameters.Fog;
+		}
+	
+		//slabs
+		if (slabMat) {
+			slabMat.uniforms.lightVec.value.set(directionalLight.position.x, directionalLight.position.y, directionalLight.position.z);
+	
+			slabMat.uniforms.fogColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+			slabMat.uniforms.rimColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+	
+			slabMat.uniforms.fogDensity.value = generalParameters.FogDensity;
+			slabMat.uniforms.fogSwitch.value = generalParameters.Fog;
+		}
+	
+		//2D layer voxels
+		for (var i = 0; i < levelLayers.length; i++) {
+			if (levelLayers[i].instancedWalkwayMaterial) {
+				levelLayers[i].instancedWalkwayMaterial.uniforms.lightVec.value.set(directionalLight.position.x, directionalLight.position.y, directionalLight.position.z);
+	
+				levelLayers[i].instancedWalkwayMaterial.uniforms.fogColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+				levelLayers[i].instancedWalkwayMaterial.uniforms.rimColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+	
+				levelLayers[i].instancedWalkwayMaterial.uniforms.fogDensity.value = generalParameters.FogDensity;
+				levelLayers[i].instancedWalkwayMaterial.uniforms.fogSwitch.value = generalParameters.Fog;
+			}
+		}
+	
+		//terrain
+		for (var i = 0; i < levelLayers.length; i++) {
+			for (var j = 0; j < levelLayers[i].cellList.length; j++) {
+				var cell = levelLayers[i].cellList[j];
+				if (cell.mountainMaterial) {
+					cell.mountainMaterial.uniforms.lightVec.value.set(directionalLight.position.x, directionalLight.position.y, directionalLight.position.z);
+	
+					cell.mountainMaterial.uniforms.fogColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+					cell.mountainMaterial.uniforms.rimColor.value.set(generalParameters.fog_Col.r, generalParameters.fog_Col.g, generalParameters.fog_Col.b);
+	
+					cell.mountainMaterial.uniforms.fogDensity.value = generalParameters.FogDensity;
+					cell.mountainMaterial.uniforms.fogSwitch.value = generalParameters.Fog;
+				}
+			}
+		}
+	}
 	
 	//------------------------------------------------------------------------------
 	
@@ -555,24 +1234,72 @@
 		var stats = framework.stats;
 	
 		setupLightsandSkybox(scene, camera, renderer);
-		changeGUI(gui, camera, scene);
+		changeGUI(gui, camera, scene, renderer);
 	
-		spawn2DCells(scene);
-		createGraph(scene);
+		initgrid();
+		create3DMap(scene);
+		createTerrain(scene);
+		setMaterialValues();
 	
-		initwalkwayGeo(scene);
-		setWalkWayVoxels();
+		// cinematic setting of camera position
+		//camera position near the base of an interlayer walkway
+		var y = 20 * (levelLayers.length - 2) + 7;
+		// var slabcenter = levelLayers[levelLayers.length-2].cellList[0].center;
+		camera.position.set(interlayerwalkwaypos.x, interlayerwalkwaypos.y + 7, interlayerwalkwaypos.z);
+	
+		//look at centeroid of all slabs
+		var centroid = new THREE.Vector3(0, 0, 0);
+		var count = 0;
+		for (var i = 0; i < levelLayers.length; i++) {
+			var level = levelLayers[i];
+			for (var j = 0; j < level.cellList.length; j++) {
+				centroid.add(level.cellList[j].center);
+				count++;
+			}
+		}
+		centroid.divideScalar(count);
+	
+		var lookat = new THREE.Vector3(centroid.x, centroid.y, centroid.z);
+		camera.lookAt(lookat);
+		framework.controls.target.set(lookat.x, lookat.y, lookat.z);
 	}
 	
 	// called on frame updates
-	function onUpdate(framework) {}
+	function onUpdate(framework) {
+		//interlayer voxels
+		if (pathMat.uniforms.camPos) {
+			pathMat.uniforms.camPos.value.set(framework.camera.position.x, framework.camera.position.y, framework.camera.position.z);
+		}
+	
+		//slabs
+		if (slabMat.uniforms.camPos) {
+			slabMat.uniforms.camPos.value.set(framework.camera.position.x, framework.camera.position.y, framework.camera.position.z);
+		}
+	
+		//2D layer voxels
+		for (var i = 0; i < levelLayers.length; i++) {
+			if (levelLayers[i].instancedWalkwayMaterial.uniforms.camPos) {
+				levelLayers[i].instancedWalkwayMaterial.uniforms.camPos.value.set(framework.camera.position.x, framework.camera.position.y, framework.camera.position.z);
+			}
+		}
+	
+		//terrain
+		for (var i = 0; i < levelLayers.length; i++) {
+			for (var j = 0; j < levelLayers[i].cellList.length; j++) {
+				var cell = levelLayers[i].cellList[j];
+				if (cell.mountainMaterial.uniforms.camPos) {
+					cell.mountainMaterial.uniforms.camPos.value.set(framework.camera.position.x, framework.camera.position.y, framework.camera.position.z);
+				}
+			}
+		}
+	}
 	
 	// when the scene is done initializing, it will call onLoad, then on frame updates, call onUpdate
 	_framework2.default.init(onLoad, onUpdate);
 
-/***/ },
+/***/ }),
 /* 1 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
@@ -642,6 +1369,7 @@
 	    framework.scene = scene;
 	    framework.camera = camera;
 	    framework.renderer = renderer;
+	    framework.controls = controls;
 	
 	    // begin the animation loop
 	    (function tick() {
@@ -661,9 +1389,9 @@
 	  init: init
 	};
 
-/***/ },
+/***/ }),
 /* 2 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	// stats.js - http://github.com/mrdoob/stats.js
 	var Stats=function(){var l=Date.now(),m=l,g=0,n=Infinity,o=0,h=0,p=Infinity,q=0,r=0,s=0,f=document.createElement("div");f.id="stats";f.addEventListener("mousedown",function(b){b.preventDefault();t(++s%2)},!1);f.style.cssText="width:80px;opacity:0.9;cursor:pointer";var a=document.createElement("div");a.id="fps";a.style.cssText="padding:0 0 3px 3px;text-align:left;background-color:#002";f.appendChild(a);var i=document.createElement("div");i.id="fpsText";i.style.cssText="color:#0ff;font-family:Helvetica,Arial,sans-serif;font-size:9px;font-weight:bold;line-height:15px";
@@ -673,16 +1401,16 @@
 	a+"px",m=b,r=0);return b},update:function(){l=this.end()}}};"object"===typeof module&&(module.exports=Stats);
 
 
-/***/ },
+/***/ }),
 /* 3 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	module.exports = __webpack_require__(4)
 	module.exports.color = __webpack_require__(5)
 
-/***/ },
+/***/ }),
 /* 4 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/**
 	 * dat-gui JavaScript Controller Library
@@ -4345,9 +5073,9 @@
 	dat.dom.dom,
 	dat.utils.common);
 
-/***/ },
+/***/ }),
 /* 5 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	/**
 	 * dat-gui JavaScript Controller Library
@@ -5105,9 +5833,9 @@
 	dat.color.toString,
 	dat.utils.common);
 
-/***/ },
+/***/ }),
 /* 6 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function (global, factory) {
 		 true ? factory(exports) :
@@ -47408,9 +48136,9 @@
 	})));
 
 
-/***/ },
+/***/ }),
 /* 7 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	module.exports = function( THREE ) {
 		/**
@@ -48434,9 +49162,50 @@
 	};
 
 
-/***/ },
+/***/ }),
 /* 8 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+	
+	Object.defineProperty(exports, "__esModule", {
+		value: true
+	});
+	
+	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+	
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+	
+	var THREE = __webpack_require__(6);
+	
+	var Player //class for rooms or corridors
+	= function () {
+		function Player(_name, _pos, _radius, _mesh) {
+			_classCallCheck(this, Player);
+	
+			this.name = _name;
+			this.position = _pos;
+			this.mesh = _mesh.clone();
+			this.radius = _radius;
+		}
+	
+		_createClass(Player, [{
+			key: 'drawCell',
+			value: function drawCell(scene) {
+				this.mesh.scale.set(1, 1, 1);
+				this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+				scene.add(this.mesh);
+			}
+		}]);
+	
+		return Player;
+	}();
+	
+	exports.default = Player;
+
+/***/ }),
+/* 9 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
@@ -48458,10 +49227,36 @@
 			this.name = _name;
 			this.center = _center.clone();
 			this.mesh = _mesh.clone();
-			this.cellWidth = _width;
-			this.cellLength = _length;
+			this.cellWidth = _width; //a x axis term
+			this.cellLength = _length; //a z axis term
 			this.radius = Math.sqrt(this.cellLength * this.cellLength + this.cellWidth * this.cellWidth) * 0.5;
+	
+			//holds a plain thats deformed in the shader
+			this.mountain = new THREE.Mesh();
+			this.mountainMaterial = new THREE.ShaderMaterial();
+	
+			// //slots for attaching walkways and paths
+			// this.slot_left = [];
+			// this.slot_right = [];
+			// this.slot_front = [];
+			// this.slot_back = [];
 		}
+	
+		// emptyslots(numslots)
+		// {
+		// 	this.slot_left.length = 0;
+		// 	this.slot_right.length = 0;
+		// 	this.slot_front.length = 0;
+		// 	this.slot_back.length = 0;
+	
+		// 	for(var i=0; i<numslots; i++)
+		// 	{
+		// 		this.slot_left.push(false);
+		// 		this.slot_right.push(false);
+		// 		this.slot_front.push(false);
+		// 		this.slot_back.push(false);
+		// 	}
+		// }
 	
 		_createClass(Cell, [{
 			key: 'drawCell',
@@ -48477,9 +49272,9 @@
 	
 	exports.default = Cell;
 
-/***/ },
-/* 9 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ }),
+/* 10 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	'use strict';
 	
@@ -48504,9 +49299,85 @@
 	
 	exports.default = VoronoiPoint;
 
-/***/ },
-/* 10 */
-/***/ function(module, exports) {
+/***/ }),
+/* 11 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+	
+	Object.defineProperty(exports, "__esModule", {
+		value: true
+	});
+	
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+	
+	var THREE = __webpack_require__(6);
+	
+	var Layer //class for rooms or corridors
+	= function Layer() {
+		_classCallCheck(this, Layer);
+	
+		this.cellList = []; //holds a list of cells -- so rooms/slabs
+		this.voronoi = []; //helps create voronoi pattern graph
+		this.walkway = []; //holds a list of voxels -- so positions
+		this.instancedWalkway = new THREE.Mesh();
+	
+		this.instancedWalkwayMaterial = new THREE.RawShaderMaterial();
+	};
+	
+	exports.default = Layer;
+
+/***/ }),
+/* 12 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+	
+	Object.defineProperty(exports, "__esModule", {
+		value: true
+	});
+	
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+	
+	var THREE = __webpack_require__(6);
+	
+	var WalkwayLayer //class for rooms or corridors
+	= function WalkwayLayer() {
+		_classCallCheck(this, WalkwayLayer);
+	
+		this.walkway = []; //holds a list of voxels -- so positions
+		this.instancedWalkway = new THREE.Mesh();
+	};
+	
+	exports.default = WalkwayLayer;
+
+/***/ }),
+/* 13 */
+/***/ (function(module, exports, __webpack_require__) {
+
+	'use strict';
+	
+	Object.defineProperty(exports, "__esModule", {
+		value: true
+	});
+	
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+	
+	var THREE = __webpack_require__(6);
+	
+	var GridCell //class for rooms or corridors
+	= function GridCell() {
+		_classCallCheck(this, GridCell);
+	
+		// this.slabs = []; //list of pointers to the cell stored in layerList.cellList[index]
+		this.occupied = false; //used to determine if its filled by an instanced voxel
+	};
+	
+	exports.default = GridCell;
+
+/***/ }),
+/* 14 */
+/***/ (function(module, exports) {
 
 	'use strict';
 	
@@ -48515,9 +49386,37 @@
 	  /**
 	   * @author mrdoob / http://mrdoob.com/
 	   */
+	
 	  THREE.OBJLoader = function (manager) {
 	
 	    this.manager = manager !== undefined ? manager : THREE.DefaultLoadingManager;
+	
+	    this.materials = null;
+	
+	    this.regexp = {
+	      // v float float float
+	      vertex_pattern: /^v\s+([\d|\.|\+|\-|e|E]+)\s+([\d|\.|\+|\-|e|E]+)\s+([\d|\.|\+|\-|e|E]+)/,
+	      // vn float float float
+	      normal_pattern: /^vn\s+([\d|\.|\+|\-|e|E]+)\s+([\d|\.|\+|\-|e|E]+)\s+([\d|\.|\+|\-|e|E]+)/,
+	      // vt float float
+	      uv_pattern: /^vt\s+([\d|\.|\+|\-|e|E]+)\s+([\d|\.|\+|\-|e|E]+)/,
+	      // f vertex vertex vertex
+	      face_vertex: /^f\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)(?:\s+(-?\d+))?/,
+	      // f vertex/uv vertex/uv vertex/uv
+	      face_vertex_uv: /^f\s+(-?\d+)\/(-?\d+)\s+(-?\d+)\/(-?\d+)\s+(-?\d+)\/(-?\d+)(?:\s+(-?\d+)\/(-?\d+))?/,
+	      // f vertex/uv/normal vertex/uv/normal vertex/uv/normal
+	      face_vertex_uv_normal: /^f\s+(-?\d+)\/(-?\d+)\/(-?\d+)\s+(-?\d+)\/(-?\d+)\/(-?\d+)\s+(-?\d+)\/(-?\d+)\/(-?\d+)(?:\s+(-?\d+)\/(-?\d+)\/(-?\d+))?/,
+	      // f vertex//normal vertex//normal vertex//normal
+	      face_vertex_normal: /^f\s+(-?\d+)\/\/(-?\d+)\s+(-?\d+)\/\/(-?\d+)\s+(-?\d+)\/\/(-?\d+)(?:\s+(-?\d+)\/\/(-?\d+))?/,
+	      // o object_name | g group_name
+	      object_pattern: /^[og]\s*(.+)?/,
+	      // s boolean
+	      smoothing_pattern: /^s\s+(\d+|on|off)/,
+	      // mtllib file_reference
+	      material_library_pattern: /^mtllib /,
+	      // usemtl material_name
+	      material_use_pattern: /^usemtl /
+	    };
 	  };
 	
 	  THREE.OBJLoader.prototype = {
@@ -48528,266 +49427,529 @@
 	
 	      var scope = this;
 	
-	      var loader = new THREE.XHRLoader(scope.manager);
+	      var loader = new THREE.FileLoader(scope.manager);
+	      loader.setPath(this.path);
 	      loader.load(url, function (text) {
 	
 	        onLoad(scope.parse(text));
 	      }, onProgress, onError);
 	    },
 	
+	    setPath: function setPath(value) {
+	
+	      this.path = value;
+	    },
+	
+	    setMaterials: function setMaterials(materials) {
+	
+	      this.materials = materials;
+	    },
+	
+	    _createParserState: function _createParserState() {
+	
+	      var state = {
+	        objects: [],
+	        object: {},
+	
+	        vertices: [],
+	        normals: [],
+	        uvs: [],
+	
+	        materialLibraries: [],
+	
+	        startObject: function startObject(name, fromDeclaration) {
+	
+	          // If the current object (initial from reset) is not from a g/o declaration in the parsed
+	          // file. We need to use it for the first parsed g/o to keep things in sync.
+	          if (this.object && this.object.fromDeclaration === false) {
+	
+	            this.object.name = name;
+	            this.object.fromDeclaration = fromDeclaration !== false;
+	            return;
+	          }
+	
+	          var previousMaterial = this.object && typeof this.object.currentMaterial === 'function' ? this.object.currentMaterial() : undefined;
+	
+	          if (this.object && typeof this.object._finalize === 'function') {
+	
+	            this.object._finalize(true);
+	          }
+	
+	          this.object = {
+	            name: name || '',
+	            fromDeclaration: fromDeclaration !== false,
+	
+	            geometry: {
+	              vertices: [],
+	              normals: [],
+	              uvs: []
+	            },
+	            materials: [],
+	            smooth: true,
+	
+	            startMaterial: function startMaterial(name, libraries) {
+	
+	              var previous = this._finalize(false);
+	
+	              // New usemtl declaration overwrites an inherited material, except if faces were declared
+	              // after the material, then it must be preserved for proper MultiMaterial continuation.
+	              if (previous && (previous.inherited || previous.groupCount <= 0)) {
+	
+	                this.materials.splice(previous.index, 1);
+	              }
+	
+	              var material = {
+	                index: this.materials.length,
+	                name: name || '',
+	                mtllib: Array.isArray(libraries) && libraries.length > 0 ? libraries[libraries.length - 1] : '',
+	                smooth: previous !== undefined ? previous.smooth : this.smooth,
+	                groupStart: previous !== undefined ? previous.groupEnd : 0,
+	                groupEnd: -1,
+	                groupCount: -1,
+	                inherited: false,
+	
+	                clone: function clone(index) {
+	                  var cloned = {
+	                    index: typeof index === 'number' ? index : this.index,
+	                    name: this.name,
+	                    mtllib: this.mtllib,
+	                    smooth: this.smooth,
+	                    groupStart: 0,
+	                    groupEnd: -1,
+	                    groupCount: -1,
+	                    inherited: false
+	                  };
+	                  cloned.clone = this.clone.bind(cloned);
+	                  return cloned;
+	                }
+	              };
+	
+	              this.materials.push(material);
+	
+	              return material;
+	            },
+	
+	            currentMaterial: function currentMaterial() {
+	
+	              if (this.materials.length > 0) {
+	                return this.materials[this.materials.length - 1];
+	              }
+	
+	              return undefined;
+	            },
+	
+	            _finalize: function _finalize(end) {
+	
+	              var lastMultiMaterial = this.currentMaterial();
+	              if (lastMultiMaterial && lastMultiMaterial.groupEnd === -1) {
+	
+	                lastMultiMaterial.groupEnd = this.geometry.vertices.length / 3;
+	                lastMultiMaterial.groupCount = lastMultiMaterial.groupEnd - lastMultiMaterial.groupStart;
+	                lastMultiMaterial.inherited = false;
+	              }
+	
+	              // Ignore objects tail materials if no face declarations followed them before a new o/g started.
+	              if (end && this.materials.length > 1) {
+	
+	                for (var mi = this.materials.length - 1; mi >= 0; mi--) {
+	                  if (this.materials[mi].groupCount <= 0) {
+	                    this.materials.splice(mi, 1);
+	                  }
+	                }
+	              }
+	
+	              // Guarantee at least one empty material, this makes the creation later more straight forward.
+	              if (end && this.materials.length === 0) {
+	
+	                this.materials.push({
+	                  name: '',
+	                  smooth: this.smooth
+	                });
+	              }
+	
+	              return lastMultiMaterial;
+	            }
+	          };
+	
+	          // Inherit previous objects material.
+	          // Spec tells us that a declared material must be set to all objects until a new material is declared.
+	          // If a usemtl declaration is encountered while this new object is being parsed, it will
+	          // overwrite the inherited material. Exception being that there was already face declarations
+	          // to the inherited material, then it will be preserved for proper MultiMaterial continuation.
+	
+	          if (previousMaterial && previousMaterial.name && typeof previousMaterial.clone === "function") {
+	
+	            var declared = previousMaterial.clone(0);
+	            declared.inherited = true;
+	            this.object.materials.push(declared);
+	          }
+	
+	          this.objects.push(this.object);
+	        },
+	
+	        finalize: function finalize() {
+	
+	          if (this.object && typeof this.object._finalize === 'function') {
+	
+	            this.object._finalize(true);
+	          }
+	        },
+	
+	        parseVertexIndex: function parseVertexIndex(value, len) {
+	
+	          var index = parseInt(value, 10);
+	          return (index >= 0 ? index - 1 : index + len / 3) * 3;
+	        },
+	
+	        parseNormalIndex: function parseNormalIndex(value, len) {
+	
+	          var index = parseInt(value, 10);
+	          return (index >= 0 ? index - 1 : index + len / 3) * 3;
+	        },
+	
+	        parseUVIndex: function parseUVIndex(value, len) {
+	
+	          var index = parseInt(value, 10);
+	          return (index >= 0 ? index - 1 : index + len / 2) * 2;
+	        },
+	
+	        addVertex: function addVertex(a, b, c) {
+	
+	          var src = this.vertices;
+	          var dst = this.object.geometry.vertices;
+	
+	          dst.push(src[a + 0]);
+	          dst.push(src[a + 1]);
+	          dst.push(src[a + 2]);
+	          dst.push(src[b + 0]);
+	          dst.push(src[b + 1]);
+	          dst.push(src[b + 2]);
+	          dst.push(src[c + 0]);
+	          dst.push(src[c + 1]);
+	          dst.push(src[c + 2]);
+	        },
+	
+	        addVertexLine: function addVertexLine(a) {
+	
+	          var src = this.vertices;
+	          var dst = this.object.geometry.vertices;
+	
+	          dst.push(src[a + 0]);
+	          dst.push(src[a + 1]);
+	          dst.push(src[a + 2]);
+	        },
+	
+	        addNormal: function addNormal(a, b, c) {
+	
+	          var src = this.normals;
+	          var dst = this.object.geometry.normals;
+	
+	          dst.push(src[a + 0]);
+	          dst.push(src[a + 1]);
+	          dst.push(src[a + 2]);
+	          dst.push(src[b + 0]);
+	          dst.push(src[b + 1]);
+	          dst.push(src[b + 2]);
+	          dst.push(src[c + 0]);
+	          dst.push(src[c + 1]);
+	          dst.push(src[c + 2]);
+	        },
+	
+	        addUV: function addUV(a, b, c) {
+	
+	          var src = this.uvs;
+	          var dst = this.object.geometry.uvs;
+	
+	          dst.push(src[a + 0]);
+	          dst.push(src[a + 1]);
+	          dst.push(src[b + 0]);
+	          dst.push(src[b + 1]);
+	          dst.push(src[c + 0]);
+	          dst.push(src[c + 1]);
+	        },
+	
+	        addUVLine: function addUVLine(a) {
+	
+	          var src = this.uvs;
+	          var dst = this.object.geometry.uvs;
+	
+	          dst.push(src[a + 0]);
+	          dst.push(src[a + 1]);
+	        },
+	
+	        addFace: function addFace(a, b, c, d, ua, ub, uc, ud, na, nb, nc, nd) {
+	
+	          var vLen = this.vertices.length;
+	
+	          var ia = this.parseVertexIndex(a, vLen);
+	          var ib = this.parseVertexIndex(b, vLen);
+	          var ic = this.parseVertexIndex(c, vLen);
+	          var id;
+	
+	          if (d === undefined) {
+	
+	            this.addVertex(ia, ib, ic);
+	          } else {
+	
+	            id = this.parseVertexIndex(d, vLen);
+	
+	            this.addVertex(ia, ib, id);
+	            this.addVertex(ib, ic, id);
+	          }
+	
+	          if (ua !== undefined) {
+	
+	            var uvLen = this.uvs.length;
+	
+	            ia = this.parseUVIndex(ua, uvLen);
+	            ib = this.parseUVIndex(ub, uvLen);
+	            ic = this.parseUVIndex(uc, uvLen);
+	
+	            if (d === undefined) {
+	
+	              this.addUV(ia, ib, ic);
+	            } else {
+	
+	              id = this.parseUVIndex(ud, uvLen);
+	
+	              this.addUV(ia, ib, id);
+	              this.addUV(ib, ic, id);
+	            }
+	          }
+	
+	          if (na !== undefined) {
+	
+	            // Normals are many times the same. If so, skip function call and parseInt.
+	            var nLen = this.normals.length;
+	            ia = this.parseNormalIndex(na, nLen);
+	
+	            ib = na === nb ? ia : this.parseNormalIndex(nb, nLen);
+	            ic = na === nc ? ia : this.parseNormalIndex(nc, nLen);
+	
+	            if (d === undefined) {
+	
+	              this.addNormal(ia, ib, ic);
+	            } else {
+	
+	              id = this.parseNormalIndex(nd, nLen);
+	
+	              this.addNormal(ia, ib, id);
+	              this.addNormal(ib, ic, id);
+	            }
+	          }
+	        },
+	
+	        addLineGeometry: function addLineGeometry(vertices, uvs) {
+	
+	          this.object.geometry.type = 'Line';
+	
+	          var vLen = this.vertices.length;
+	          var uvLen = this.uvs.length;
+	
+	          for (var vi = 0, l = vertices.length; vi < l; vi++) {
+	
+	            this.addVertexLine(this.parseVertexIndex(vertices[vi], vLen));
+	          }
+	
+	          for (var uvi = 0, l = uvs.length; uvi < l; uvi++) {
+	
+	            this.addUVLine(this.parseUVIndex(uvs[uvi], uvLen));
+	          }
+	        }
+	
+	      };
+	
+	      state.startObject('', false);
+	
+	      return state;
+	    },
+	
 	    parse: function parse(text) {
 	
 	      console.time('OBJLoader');
 	
-	      var object,
-	          objects = [];
-	      var geometry, material;
+	      var state = this._createParserState();
 	
-	      function parseVertexIndex(value) {
+	      if (text.indexOf('\r\n') !== -1) {
 	
-	        var index = parseInt(value);
-	
-	        return (index >= 0 ? index - 1 : index + vertices.length / 3) * 3;
+	        // This is faster than String.split with regex that splits on both
+	        text = text.replace(/\r\n/g, '\n');
 	      }
 	
-	      function parseNormalIndex(value) {
+	      if (text.indexOf('\\\n') !== -1) {
 	
-	        var index = parseInt(value);
-	
-	        return (index >= 0 ? index - 1 : index + normals.length / 3) * 3;
+	        // join lines separated by a line continuation character (\)
+	        text = text.replace(/\\\n/g, '');
 	      }
-	
-	      function parseUVIndex(value) {
-	
-	        var index = parseInt(value);
-	
-	        return (index >= 0 ? index - 1 : index + uvs.length / 2) * 2;
-	      }
-	
-	      function addVertex(a, b, c) {
-	
-	        geometry.vertices.push(vertices[a], vertices[a + 1], vertices[a + 2], vertices[b], vertices[b + 1], vertices[b + 2], vertices[c], vertices[c + 1], vertices[c + 2]);
-	      }
-	
-	      function addNormal(a, b, c) {
-	
-	        geometry.normals.push(normals[a], normals[a + 1], normals[a + 2], normals[b], normals[b + 1], normals[b + 2], normals[c], normals[c + 1], normals[c + 2]);
-	      }
-	
-	      function addUV(a, b, c) {
-	
-	        geometry.uvs.push(uvs[a], uvs[a + 1], uvs[b], uvs[b + 1], uvs[c], uvs[c + 1]);
-	      }
-	
-	      function addFace(a, b, c, d, ua, ub, uc, ud, na, nb, nc, nd) {
-	
-	        var ia = parseVertexIndex(a);
-	        var ib = parseVertexIndex(b);
-	        var ic = parseVertexIndex(c);
-	        var id;
-	
-	        if (d === undefined) {
-	
-	          addVertex(ia, ib, ic);
-	        } else {
-	
-	          id = parseVertexIndex(d);
-	
-	          addVertex(ia, ib, id);
-	          addVertex(ib, ic, id);
-	        }
-	
-	        if (ua !== undefined) {
-	
-	          ia = parseUVIndex(ua);
-	          ib = parseUVIndex(ub);
-	          ic = parseUVIndex(uc);
-	
-	          if (d === undefined) {
-	
-	            addUV(ia, ib, ic);
-	          } else {
-	
-	            id = parseUVIndex(ud);
-	
-	            addUV(ia, ib, id);
-	            addUV(ib, ic, id);
-	          }
-	        }
-	
-	        if (na !== undefined) {
-	
-	          ia = parseNormalIndex(na);
-	          ib = parseNormalIndex(nb);
-	          ic = parseNormalIndex(nc);
-	
-	          if (d === undefined) {
-	
-	            addNormal(ia, ib, ic);
-	          } else {
-	
-	            id = parseNormalIndex(nd);
-	
-	            addNormal(ia, ib, id);
-	            addNormal(ib, ic, id);
-	          }
-	        }
-	      }
-	
-	      // create mesh if no objects in text
-	
-	      if (/^o /gm.test(text) === false) {
-	
-	        geometry = {
-	          vertices: [],
-	          normals: [],
-	          uvs: []
-	        };
-	
-	        material = {
-	          name: ''
-	        };
-	
-	        object = {
-	          name: '',
-	          geometry: geometry,
-	          material: material
-	        };
-	
-	        objects.push(object);
-	      }
-	
-	      var vertices = [];
-	      var normals = [];
-	      var uvs = [];
-	
-	      // v float float float
-	
-	      var vertex_pattern = /v( +[\d|\.|\+|\-|e|E]+)( +[\d|\.|\+|\-|e|E]+)( +[\d|\.|\+|\-|e|E]+)/;
-	
-	      // vn float float float
-	
-	      var normal_pattern = /vn( +[\d|\.|\+|\-|e|E]+)( +[\d|\.|\+|\-|e|E]+)( +[\d|\.|\+|\-|e|E]+)/;
-	
-	      // vt float float
-	
-	      var uv_pattern = /vt( +[\d|\.|\+|\-|e|E]+)( +[\d|\.|\+|\-|e|E]+)/;
-	
-	      // f vertex vertex vertex ...
-	
-	      var face_pattern1 = /f( +-?\d+)( +-?\d+)( +-?\d+)( +-?\d+)?/;
-	
-	      // f vertex/uv vertex/uv vertex/uv ...
-	
-	      var face_pattern2 = /f( +(-?\d+)\/(-?\d+))( +(-?\d+)\/(-?\d+))( +(-?\d+)\/(-?\d+))( +(-?\d+)\/(-?\d+))?/;
-	
-	      // f vertex/uv/normal vertex/uv/normal vertex/uv/normal ...
-	
-	      var face_pattern3 = /f( +(-?\d+)\/(-?\d+)\/(-?\d+))( +(-?\d+)\/(-?\d+)\/(-?\d+))( +(-?\d+)\/(-?\d+)\/(-?\d+))( +(-?\d+)\/(-?\d+)\/(-?\d+))?/;
-	
-	      // f vertex//normal vertex//normal vertex//normal ...
-	
-	      var face_pattern4 = /f( +(-?\d+)\/\/(-?\d+))( +(-?\d+)\/\/(-?\d+))( +(-?\d+)\/\/(-?\d+))( +(-?\d+)\/\/(-?\d+))?/;
-	
-	      //
 	
 	      var lines = text.split('\n');
+	      var line = '',
+	          lineFirstChar = '',
+	          lineSecondChar = '';
+	      var lineLength = 0;
+	      var result = [];
 	
-	      for (var i = 0; i < lines.length; i++) {
+	      // Faster to just trim left side of the line. Use if available.
+	      var trimLeft = typeof ''.trimLeft === 'function';
 	
-	        var line = lines[i];
-	        line = line.trim();
+	      for (var i = 0, l = lines.length; i < l; i++) {
 	
-	        var result;
+	        line = lines[i];
 	
-	        if (line.length === 0 || line.charAt(0) === '#') {
+	        line = trimLeft ? line.trimLeft() : line.trim();
 	
-	          continue;
-	        } else if ((result = vertex_pattern.exec(line)) !== null) {
+	        lineLength = line.length;
 	
-	          // ["v 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
+	        if (lineLength === 0) continue;
 	
-	          vertices.push(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3]));
-	        } else if ((result = normal_pattern.exec(line)) !== null) {
+	        lineFirstChar = line.charAt(0);
 	
-	          // ["vn 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
+	        // @todo invoke passed in handler if any
+	        if (lineFirstChar === '#') continue;
 	
-	          normals.push(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3]));
-	        } else if ((result = uv_pattern.exec(line)) !== null) {
+	        if (lineFirstChar === 'v') {
 	
-	          // ["vt 0.1 0.2", "0.1", "0.2"]
+	          lineSecondChar = line.charAt(1);
 	
-	          uvs.push(parseFloat(result[1]), parseFloat(result[2]));
-	        } else if ((result = face_pattern1.exec(line)) !== null) {
+	          if (lineSecondChar === ' ' && (result = this.regexp.vertex_pattern.exec(line)) !== null) {
 	
-	          // ["f 1 2 3", "1", "2", "3", undefined]
+	            // 0                  1      2      3
+	            // ["v 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
 	
-	          addFace(result[1], result[2], result[3], result[4]);
-	        } else if ((result = face_pattern2.exec(line)) !== null) {
+	            state.vertices.push(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3]));
+	          } else if (lineSecondChar === 'n' && (result = this.regexp.normal_pattern.exec(line)) !== null) {
 	
-	          // ["f 1/1 2/2 3/3", " 1/1", "1", "1", " 2/2", "2", "2", " 3/3", "3", "3", undefined, undefined, undefined]
+	            // 0                   1      2      3
+	            // ["vn 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
 	
-	          addFace(result[2], result[5], result[8], result[11], result[3], result[6], result[9], result[12]);
-	        } else if ((result = face_pattern3.exec(line)) !== null) {
+	            state.normals.push(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3]));
+	          } else if (lineSecondChar === 't' && (result = this.regexp.uv_pattern.exec(line)) !== null) {
 	
-	          // ["f 1/1/1 2/2/2 3/3/3", " 1/1/1", "1", "1", "1", " 2/2/2", "2", "2", "2", " 3/3/3", "3", "3", "3", undefined, undefined, undefined, undefined]
+	            // 0               1      2
+	            // ["vt 0.1 0.2", "0.1", "0.2"]
 	
-	          addFace(result[2], result[6], result[10], result[14], result[3], result[7], result[11], result[15], result[4], result[8], result[12], result[16]);
-	        } else if ((result = face_pattern4.exec(line)) !== null) {
+	            state.uvs.push(parseFloat(result[1]), parseFloat(result[2]));
+	          } else {
 	
-	          // ["f 1//1 2//2 3//3", " 1//1", "1", "1", " 2//2", "2", "2", " 3//3", "3", "3", undefined, undefined, undefined]
+	            throw new Error("Unexpected vertex/normal/uv line: '" + line + "'");
+	          }
+	        } else if (lineFirstChar === "f") {
 	
-	          addFace(result[2], result[5], result[8], result[11], undefined, undefined, undefined, undefined, result[3], result[6], result[9], result[12]);
-	        } else if (/^o /.test(line)) {
+	          if ((result = this.regexp.face_vertex_uv_normal.exec(line)) !== null) {
 	
-	          geometry = {
-	            vertices: [],
-	            normals: [],
-	            uvs: []
-	          };
+	            // f vertex/uv/normal vertex/uv/normal vertex/uv/normal
+	            // 0                        1    2    3    4    5    6    7    8    9   10         11         12
+	            // ["f 1/1/1 2/2/2 3/3/3", "1", "1", "1", "2", "2", "2", "3", "3", "3", undefined, undefined, undefined]
 	
-	          material = {
-	            name: ''
-	          };
+	            state.addFace(result[1], result[4], result[7], result[10], result[2], result[5], result[8], result[11], result[3], result[6], result[9], result[12]);
+	          } else if ((result = this.regexp.face_vertex_uv.exec(line)) !== null) {
 	
-	          object = {
-	            name: line.substring(2).trim(),
-	            geometry: geometry,
-	            material: material
-	          };
+	            // f vertex/uv vertex/uv vertex/uv
+	            // 0                  1    2    3    4    5    6   7          8
+	            // ["f 1/1 2/2 3/3", "1", "1", "2", "2", "3", "3", undefined, undefined]
 	
-	          objects.push(object);
-	        } else if (/^g /.test(line)) {
+	            state.addFace(result[1], result[3], result[5], result[7], result[2], result[4], result[6], result[8]);
+	          } else if ((result = this.regexp.face_vertex_normal.exec(line)) !== null) {
 	
-	          // group
+	            // f vertex//normal vertex//normal vertex//normal
+	            // 0                     1    2    3    4    5    6   7          8
+	            // ["f 1//1 2//2 3//3", "1", "1", "2", "2", "3", "3", undefined, undefined]
 	
-	        } else if (/^usemtl /.test(line)) {
+	            state.addFace(result[1], result[3], result[5], result[7], undefined, undefined, undefined, undefined, result[2], result[4], result[6], result[8]);
+	          } else if ((result = this.regexp.face_vertex.exec(line)) !== null) {
 	
-	            // material
+	            // f vertex vertex vertex
+	            // 0            1    2    3   4
+	            // ["f 1 2 3", "1", "2", "3", undefined]
 	
-	            material.name = line.substring(7).trim();
-	          } else if (/^mtllib /.test(line)) {
+	            state.addFace(result[1], result[2], result[3], result[4]);
+	          } else {
 	
-	            // mtl file
+	            throw new Error("Unexpected face line: '" + line + "'");
+	          }
+	        } else if (lineFirstChar === "l") {
 	
-	          } else if (/^s /.test(line)) {
+	          var lineParts = line.substring(1).trim().split(" ");
+	          var lineVertices = [],
+	              lineUVs = [];
 	
-	              // smooth shading
+	          if (line.indexOf("/") === -1) {
 	
-	            } else {
+	            lineVertices = lineParts;
+	          } else {
 	
-	                // console.log( "THREE.OBJLoader: Unhandled line " + line );
+	            for (var li = 0, llen = lineParts.length; li < llen; li++) {
 	
-	              }
+	              var parts = lineParts[li].split("/");
+	
+	              if (parts[0] !== "") lineVertices.push(parts[0]);
+	              if (parts[1] !== "") lineUVs.push(parts[1]);
+	            }
+	          }
+	          state.addLineGeometry(lineVertices, lineUVs);
+	        } else if ((result = this.regexp.object_pattern.exec(line)) !== null) {
+	
+	          // o object_name
+	          // or
+	          // g group_name
+	
+	          // WORKAROUND: https://bugs.chromium.org/p/v8/issues/detail?id=2869
+	          // var name = result[ 0 ].substr( 1 ).trim();
+	          var name = (" " + result[0].substr(1).trim()).substr(1);
+	
+	          state.startObject(name);
+	        } else if (this.regexp.material_use_pattern.test(line)) {
+	
+	          // material
+	
+	          state.object.startMaterial(line.substring(7).trim(), state.materialLibraries);
+	        } else if (this.regexp.material_library_pattern.test(line)) {
+	
+	          // mtl file
+	
+	          state.materialLibraries.push(line.substring(7).trim());
+	        } else if ((result = this.regexp.smoothing_pattern.exec(line)) !== null) {
+	
+	          // smooth shading
+	
+	          // @todo Handle files that have varying smooth values for a set of faces inside one geometry,
+	          // but does not define a usemtl for each face set.
+	          // This should be detected and a dummy material created (later MultiMaterial and geometry groups).
+	          // This requires some care to not create extra material on each smooth value for "normal" obj files.
+	          // where explicit usemtl defines geometry groups.
+	          // Example asset: examples/models/obj/cerberus/Cerberus.obj
+	
+	          var value = result[1].trim().toLowerCase();
+	          state.object.smooth = value === '1' || value === 'on';
+	
+	          var material = state.object.currentMaterial();
+	          if (material) {
+	
+	            material.smooth = state.object.smooth;
+	          }
+	        } else {
+	
+	          // Handle null terminated files without exception
+	          if (line === '\0') continue;
+	
+	          throw new Error("Unexpected line: '" + line + "'");
+	        }
 	      }
 	
-	      var container = new THREE.Object3D();
-	      var l;
+	      state.finalize();
 	
-	      for (i = 0, l = objects.length; i < l; i++) {
+	      var container = new THREE.Group();
+	      container.materialLibraries = [].concat(state.materialLibraries);
 	
-	        object = objects[i];
-	        geometry = object.geometry;
+	      for (var i = 0, l = state.objects.length; i < l; i++) {
+	
+	        var object = state.objects[i];
+	        var geometry = object.geometry;
+	        var materials = object.materials;
+	        var isLine = geometry.type === 'Line';
+	
+	        // Skip o/g line declarations that did not follow with any faces
+	        if (geometry.vertices.length === 0) continue;
 	
 	        var buffergeometry = new THREE.BufferGeometry();
 	
@@ -48796,6 +49958,9 @@
 	        if (geometry.normals.length > 0) {
 	
 	          buffergeometry.addAttribute('normal', new THREE.BufferAttribute(new Float32Array(geometry.normals), 3));
+	        } else {
+	
+	          buffergeometry.computeVertexNormals();
 	        }
 	
 	        if (geometry.uvs.length > 0) {
@@ -48803,12 +49968,58 @@
 	          buffergeometry.addAttribute('uv', new THREE.BufferAttribute(new Float32Array(geometry.uvs), 2));
 	        }
 	
-	        material = new THREE.MeshLambertMaterial({
-	          color: 0xff0000
-	        });
-	        material.name = object.material.name;
+	        // Create materials
 	
-	        var mesh = new THREE.Mesh(buffergeometry, material);
+	        var createdMaterials = [];
+	
+	        for (var mi = 0, miLen = materials.length; mi < miLen; mi++) {
+	
+	          var sourceMaterial = materials[mi];
+	          var material = undefined;
+	
+	          if (this.materials !== null) {
+	
+	            material = this.materials.create(sourceMaterial.name);
+	
+	            // mtl etc. loaders probably can't create line materials correctly, copy properties to a line material.
+	            if (isLine && material && !(material instanceof THREE.LineBasicMaterial)) {
+	
+	              var materialLine = new THREE.LineBasicMaterial();
+	              materialLine.copy(material);
+	              material = materialLine;
+	            }
+	          }
+	
+	          if (!material) {
+	
+	            material = !isLine ? new THREE.MeshPhongMaterial() : new THREE.LineBasicMaterial();
+	            material.name = sourceMaterial.name;
+	          }
+	
+	          material.shading = sourceMaterial.smooth ? THREE.SmoothShading : THREE.FlatShading;
+	
+	          createdMaterials.push(material);
+	        }
+	
+	        // Create mesh
+	
+	        var mesh;
+	
+	        if (createdMaterials.length > 1) {
+	
+	          for (var mi = 0, miLen = materials.length; mi < miLen; mi++) {
+	
+	            var sourceMaterial = materials[mi];
+	            buffergeometry.addGroup(sourceMaterial.groupStart, sourceMaterial.groupCount, mi);
+	          }
+	
+	          var multiMaterial = new THREE.MultiMaterial(createdMaterials);
+	          mesh = !isLine ? new THREE.Mesh(buffergeometry, multiMaterial) : new THREE.LineSegments(buffergeometry, multiMaterial);
+	        } else {
+	
+	          mesh = !isLine ? new THREE.Mesh(buffergeometry, createdMaterials[0]) : new THREE.LineSegments(buffergeometry, createdMaterials[0]);
+	        }
+	
 	        mesh.name = object.name;
 	
 	        container.add(mesh);
@@ -48822,9 +50033,9 @@
 	  };
 	};
 
-/***/ },
-/* 11 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ }),
+/* 15 */
+/***/ (function(module, exports, __webpack_require__) {
 
 	/*
 	 * random-seed
@@ -48880,7 +50091,7 @@
 		1460910 and 1768863. (We use the largest one that's < 2^21)
 		============================================================================ */
 	'use strict';
-	var stringify = __webpack_require__(12);
+	var stringify = __webpack_require__(16);
 	
 	/*	============================================================================
 	This is based upon Johannes Baagoe's carefully designed and efficient hash
@@ -49096,9 +50307,9 @@
 	module.exports = uheprng;
 
 
-/***/ },
-/* 12 */
-/***/ function(module, exports) {
+/***/ }),
+/* 16 */
+/***/ (function(module, exports) {
 
 	exports = module.exports = stringify
 	exports.getSerialize = serializer
@@ -49129,30 +50340,54 @@
 	}
 
 
-/***/ },
-/* 13 */
-/***/ function(module, exports) {
+/***/ }),
+/* 17 */
+/***/ (function(module, exports) {
 
-	module.exports = "varying vec2 f_uv;\r\nvarying vec3 f_nor;\r\nvarying vec3 f_pos;\r\n\r\nvoid main()\r\n{\r\n    f_uv = uv;\r\n    f_nor = normal;\r\n    f_pos = position;\r\n    gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\r\n}\r\n"
+	module.exports = "varying vec3 f_nor;\r\nvarying vec3 f_pos;\r\n\r\nvarying vec4 viewSpace;\r\n\r\nvoid main()\r\n{\r\n    f_nor = normal;\r\n    f_pos = position;\r\n\r\n    viewSpace = modelViewMatrix*vec4(position, 1.0);\r\n\r\n    gl_Position = projectionMatrix * viewSpace;\r\n}\r\n"
 
-/***/ },
-/* 14 */
-/***/ function(module, exports) {
+/***/ }),
+/* 18 */
+/***/ (function(module, exports) {
 
-	module.exports = "varying vec2 f_uv;\r\nvarying vec3 f_nor;\r\nvarying vec3 f_pos;\r\n\r\nuniform vec3 ambientLight;\r\nuniform vec3 lightVec;\r\nuniform sampler2D image1;\r\n\r\nvoid main()\r\n{\r\n    vec4 texColor = texture2D( image1, f_uv );\r\n\r\n    float absDot = clamp(dot(f_nor, normalize(lightVec - f_pos)), 0.0, 1.0);\r\n\r\n    gl_FragColor = vec4( absDot * texColor.rgb + ambientLight, 1.0 );\r\n}\r\n"
+	module.exports = "varying vec3 f_nor;\r\nvarying vec3 f_pos;\r\n\r\nuniform vec3 ambientLight;\r\nuniform vec3 albedo;\r\nuniform vec3 lightVec;\r\n\r\nuniform float fogSwitch;\r\nuniform vec3 camPos;\r\nuniform vec3 fogColor;\r\nuniform float fogDensity;\r\nuniform vec3 rimColor;\r\nvarying vec4 viewSpace;\r\n\r\nvoid main()\r\n{\r\n    vec3 basecolor = albedo;\r\n    vec3 eye_position = camPos;\r\n    vec3 finalColor = vec3(0.0);\r\n\r\n    vec3 light = vec3(1.0);\r\n\r\n    float absDot = clamp(dot(f_nor, normalize(light)), 0.0, 1.0);\r\n\r\n\r\n\tvec3 finalColor_noFog = absDot*albedo + ambientLight*basecolor;\r\n\r\n    //get light an view directions\r\n\tvec3 L = normalize( light);\r\n\tvec3 V = normalize( eye_position - f_pos);\r\n\r\n\t//diffuse lighting\r\n\tvec3 diffuse = ambientLight * max(0.0, dot(L, f_nor));\r\n\t \r\n\t//rim lighting\r\n\tfloat rim = 1.0 - max(dot(V, f_nor), 0.0);\r\n\trim = smoothstep(0.6, 1.0, rim);\r\n\tvec3 finalRim = rimColor * vec3(rim, rim, rim);\r\n\r\n\t//get all lights and texture \r\n\tvec3 f_color = finalRim + basecolor + ambientLight*basecolor;\r\n\r\n    float dist = length(viewSpace);\r\n    float f = exp(-fogDensity*dist*fogDensity*dist);\r\n    f = clamp(f, 0.0, 1.0);\r\n\r\n    finalColor = (1.0-f)*fogColor + f*f_color.rgb;\r\n    finalColor = absDot*finalColor;\r\n\r\n\tif( dist>75.0 )\r\n\t{\r\n\t\tfinalColor = fogColor;\r\n\t}\t\r\n\telse\r\n\t{\r\n\t\tfloat t = dist/75.0;\r\n\t\tfinalColor = t*fogColor + (1.0-t)*absDot*finalColor;\r\n\t}\r\n\r\n\tfinalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;\r\n\r\n    gl_FragColor = vec4( finalColor , 1.0 );\r\n}\r\n"
 
-/***/ },
-/* 15 */
-/***/ function(module, exports) {
+/***/ }),
+/* 19 */
+/***/ (function(module, exports) {
 
-	module.exports = "precision highp float;\r\nuniform mat4 modelViewMatrix;\r\nuniform mat4 projectionMatrix;\r\nattribute vec3 position;\r\nattribute vec3 offset;\r\nattribute vec2 uv;\r\nvarying vec2 vUv;\r\n\r\nvoid main() \r\n{\r\n\tvec3 vPosition = position;\r\n\tvUv = uv;\r\n\tgl_Position = projectionMatrix * modelViewMatrix * vec4( offset + vPosition, 1.0 );\r\n}"
+	module.exports = "precision highp float;\r\n\r\nuniform mat4 modelViewMatrix;\r\nuniform mat4 projectionMatrix;\r\n\r\nattribute vec3 position;\r\nattribute vec3 normal;\r\nattribute vec3 offset;\r\nattribute vec2 uv;\r\n\r\nvarying vec2 f_uv;\r\nvarying vec3 f_pos;\r\nvarying vec3 f_nor;\r\n\r\nvarying vec4 viewSpace;\r\n\r\nvoid main() \r\n{\r\n    f_uv = uv;\r\n    f_nor = normal;\r\n    f_pos = (modelViewMatrix * vec4( offset + position, 1.0 )).rgb;\r\n\r\n    viewSpace = modelViewMatrix*vec4(offset + position, 1.0);\r\n\r\n\tgl_Position = projectionMatrix * viewSpace;\r\n}"
 
-/***/ },
-/* 16 */
-/***/ function(module, exports) {
+/***/ }),
+/* 20 */
+/***/ (function(module, exports) {
 
-	module.exports = "precision highp float;\r\n\r\nvoid main() \r\n{\r\n\tgl_FragColor = vec4(0.3,0.3,0.3,1);\r\n}"
+	module.exports = "//Reference for fog: http://in2gpu.com/2014/07/22/create-fog-shader/\r\n\r\nprecision highp float;\r\n\r\nuniform sampler2D image1;\r\n\r\nuniform vec3 ambientLight;\r\nuniform vec3 lightVec;\r\n\r\nuniform float fogSwitch;\r\nuniform vec3 camPos;\r\nuniform vec3 fogColor;\r\nuniform float fogDensity;\r\nuniform vec3 rimColor;\r\nvarying vec4 viewSpace;\r\n\r\nvarying vec2 f_uv;\r\nvarying vec3 f_pos;\r\nvarying vec3 f_nor;\r\n\r\nvoid main() \r\n{\r\n    vec4 texColor = texture2D( image1, f_uv );\r\n\r\n    vec3 eye_position = camPos;\r\n    vec3 finalColor = vec3(0.0);\r\n\r\n\tfloat absDot = clamp(dot(f_nor, normalize(lightVec)), 0.0, 1.0);\t\r\n\r\n\tvec3 finalColor_noFog = absDot*texColor.rgb + ambientLight*texColor.rgb;\r\n\r\n\t//Fog Calculations\r\n    //get light an view directions\r\n\tvec3 L = normalize( lightVec );\r\n\tvec3 V = normalize( eye_position - f_pos);\r\n\r\n\t//diffuse lighting\r\n\tvec3 diffuse = ambientLight * max(0.0, dot(L, f_nor));\r\n\t \r\n\t//rim lighting\r\n\tfloat rim = 1.0 - max(dot(V, f_nor), 0.0);\r\n\trim = smoothstep(0.6, 1.0, rim);\r\n\tvec3 finalRim = rimColor * vec3(rim, rim, rim);\r\n\r\n\t//get all lights and texture\r\n\tvec3 f_color = finalRim + texColor.rgb + ambientLight*texColor.rgb;\r\n\r\n    float dist = length(viewSpace);\r\n    float f = exp(-fogDensity*dist*fogDensity*dist/8.0);\r\n    f = clamp(f, 0.0, 1.0);\r\n\r\n    finalColor = (1.0-f)*fogColor + f*f_color;\r\n    finalColor = absDot*finalColor;\r\n    \r\n\tif( dist>75.0 )\r\n\t{\r\n\t\tfinalColor = fogColor;\r\n\t}\t\r\n\telse\r\n\t{\r\n\t\tfloat t = dist/75.0;\r\n\t\tfinalColor = t*fogColor + (1.0-t)*absDot*finalColor;\r\n\t}\r\n\r\n    finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;\r\n\r\n    gl_FragColor = vec4( finalColor, 1.0 );\r\n}"
 
-/***/ }
+/***/ }),
+/* 21 */
+/***/ (function(module, exports) {
+
+	module.exports = "precision highp float;\r\n\r\nuniform mat4 modelViewMatrix;\r\nuniform mat4 projectionMatrix;\r\n\r\nattribute vec3 position;\r\nattribute vec3 normal;\r\nattribute vec3 offset;\r\nattribute vec2 uv;\r\n\r\nvarying vec3 f_pos;\r\nvarying vec3 f_nor;\r\nvarying vec2 f_uv;\r\n\r\nvarying vec4 viewSpace;\r\n\r\nvoid main() \r\n{\r\n    f_uv = uv;\r\n    f_nor = normal;\r\n    f_pos = (modelViewMatrix * vec4( offset + position, 1.0 )).rgb;\r\n\r\n    viewSpace = modelViewMatrix*vec4(offset + position, 1.0);\r\n\r\n\tgl_Position = projectionMatrix * viewSpace;\r\n}"
+
+/***/ }),
+/* 22 */
+/***/ (function(module, exports) {
+
+	module.exports = "//Reference for fog: http://in2gpu.com/2014/07/22/create-fog-shader/\r\n\r\nprecision highp float;\r\n\r\nuniform vec3 albedo;\r\n\r\nuniform vec3 ambientLight;\r\nuniform vec3 lightVec;\r\n\r\nuniform float fogSwitch;\r\nuniform vec3 camPos;\r\nuniform vec3 fogColor;\r\nuniform float fogDensity;\r\nuniform vec3 rimColor;\r\nvarying vec4 viewSpace;\r\n\r\nvarying vec2 f_uv;\r\nvarying vec3 f_pos;\r\nvarying vec3 f_nor;\r\n\r\nvoid main() \r\n{\r\n\tvec4 baseColor = vec4(albedo, 1.0);\r\n\tvec3 eye_position = camPos;\r\n    vec3 finalColor = vec3(0.0);\r\n\r\n\tfloat absDot = clamp(dot(f_nor, normalize(lightVec)), 0.0, 1.0);\r\n\r\n\tvec3 finalColor_noFog = absDot*baseColor.rgb + ambientLight*baseColor.rgb;\r\n\r\n\t//Fog Calculations\r\n\t//get light an view directions\r\n\tvec3 L = normalize( lightVec - f_pos);\r\n\tvec3 V = normalize( eye_position - f_pos);\r\n\r\n\t//diffuse lighting\r\n\tvec3 diffuse = ambientLight * max(0.0, dot(L, f_nor));\r\n\t \r\n\t//rim lighting\r\n\tfloat rim = 1.0 - max(dot(V, f_nor), 0.0);\r\n\trim = smoothstep(0.6, 1.0, rim);\r\n\tvec3 finalRim = rimColor * vec3(rim, rim, rim);\r\n\r\n\t//get all lights and texture\r\n\tvec3 f_color = finalRim + baseColor.rgb + ambientLight*baseColor.rgb;\r\n\r\n\tfloat dist = length(viewSpace);\r\n\tfloat f = exp(-fogDensity*dist*fogDensity*dist/8.0);\r\n\tf = clamp(f, 0.0, 1.0);\r\n\r\n\tfinalColor = (1.0-f)*fogColor + f*f_color.rgb;\r\n\tfinalColor = absDot*finalColor;\r\n\r\n\tif( dist>75.0 )\r\n\t{\r\n\t\tfinalColor = fogColor;\r\n\t}\t\r\n\telse\r\n\t{\r\n\t\tfloat t = dist/75.0;\r\n\t\tfinalColor = t*fogColor + (1.0-t)*absDot*finalColor;\r\n\t}\r\n\r\n    finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;\r\n\r\n    gl_FragColor = vec4( finalColor, 1.0 );\t\r\n}"
+
+/***/ }),
+/* 23 */
+/***/ (function(module, exports) {
+
+	module.exports = "uniform vec3 slabCenter;\r\nuniform float slabRadius;\r\nuniform float width;\r\nuniform float length;\r\n\r\nvarying vec2 f_uv;\r\nvarying vec3 f_nor;\r\nvarying vec3 f_pos;\r\n\r\nvarying float f_elevation;\r\nvarying float f_moisture;\r\n\r\nvarying vec4 viewSpace;\r\n\r\nvec2 hashSimplex( vec2 p ) // replace this by something better\r\n{\r\n\tp = vec2( dot(p,vec2(127.1,311.7)),\r\n\t\t\t  dot(p,vec2(269.5,183.3)) );\r\n\r\n\treturn -1.0 + 2.0*fract(sin(p)*43758.5453123);\r\n}\r\n\r\nvec2 hashGradient( vec2 x )  // replace this by something better\r\n{\r\n    const vec2 k = vec2( 0.3183099, 0.3678794 );\r\n    x = x*k + k.yx;\r\n    return -1.0 + 2.0*fract( 16.0 * k*fract( x.x*x.y*(x.x+x.y)) );\r\n}\r\n\r\nfloat noiseSimplex2D( vec2 p )\r\n{\r\n    const float K1 = 0.366025404; // (sqrt(3)-1)/2;\r\n    const float K2 = 0.211324865; // (3-sqrt(3))/6;\r\n\r\n\tvec2 i = floor( p + (p.x+p.y)*K1 );\r\n\r\n    vec2 a = p - i + (i.x+i.y)*K2;\r\n    vec2 o = step(a.yx,a.xy);\r\n    vec2 b = a - o + K2;\r\n\tvec2 c = a - 1.0 + 2.0*K2;\r\n\r\n    vec3 h = max( 0.5-vec3(dot(a,a), dot(b,b), dot(c,c) ), 0.0 );\r\n\r\n\tvec3 n = h*h*h*h*vec3( dot(a,hashSimplex(i+0.0)), dot(b,hashSimplex(i+o)), dot(c,hashSimplex(i+1.0)));\r\n\r\n    return dot( n, vec3(70.0) );\r\n}\r\n\r\nfloat noiseGradient2D( in vec2 p )\r\n{\r\n    vec2 i = floor( p );\r\n    vec2 f = fract( p );\r\n\r\n\tvec2 u = f*f*(3.0-2.0*f);\r\n\r\n    return mix( mix( dot( hashGradient( i + vec2(0.0,0.0) ), f - vec2(0.0,0.0) ),\r\n                     dot( hashGradient( i + vec2(1.0,0.0) ), f - vec2(1.0,0.0) ), u.x),\r\n                mix( dot( hashGradient( i + vec2(0.0,1.0) ), f - vec2(0.0,1.0) ),\r\n                     dot( hashGradient( i + vec2(1.0,1.0) ), f - vec2(1.0,1.0) ), u.x), u.y);\r\n}\r\n\r\nfloat Cosine_Interpolate(float a, float b, float t)\r\n{\r\n  // a --- the lower bound value of interpolation\r\n  // b --- the upper bound value of interpolation\r\n\r\n\tfloat ft = t * 3.1415927;\r\n\tfloat f = (1.0 - cos(ft)) * 0.5;\r\n\r\n\treturn  a*(1.0-f) + b*f;\r\n}\r\n\r\nfloat smoothNoiseSimplex2D(vec2 p)\r\n{\r\n\tvec2 p1 = vec2( p.x - 1.0, p.y + 1.0);\r\n\tvec2 p2 = vec2( p.x      , p.y + 1.0);\r\n\tvec2 p3 = vec2( p.x + 1.0, p.y + 1.0);\r\n\tvec2 p4 = vec2( p.x - 1.0, p.y );\r\n\tvec2 p5 = vec2( p.x      , p.y );\r\n\tvec2 p6 = vec2( p.x + 1.0, p.y );\r\n\tvec2 p7 = vec2( p.x - 1.0, p.y - 1.0);\r\n\tvec2 p8 = vec2( p.x      , p.y - 1.0);\r\n\tvec2 p9 = vec2( p.x + 1.0, p.y - 1.0);\r\n\r\n\tfloat influence1 = 0.5;\r\n\tfloat influence2 = 0.0875;\r\n\tfloat influence3 = 0.0375;\r\n\t//make sure 6*influnce1 + 20*influence2=1\r\n\r\n\tfloat n1 =  influence3 * noiseSimplex2D(p1);\r\n\tfloat n2 =  influence2 * noiseSimplex2D(p2);\r\n\tfloat n3 =  influence3 * noiseSimplex2D(p3);\r\n\tfloat n4 =  influence2 * noiseSimplex2D(p4);\r\n\tfloat n5 =  influence1 * noiseSimplex2D(p5);\r\n\tfloat n6 =  influence2 * noiseSimplex2D(p6);\r\n\tfloat n7 =  influence3 * noiseSimplex2D(p7);\r\n\tfloat n8 =  influence2 * noiseSimplex2D(p8);\r\n\tfloat n9 =  influence3 * noiseSimplex2D(p9);\r\n\r\n\tfloat average = n1 + n2 +n3 + n4 + n5 + n6 +n7 + n8 + n9;\r\n\r\n\treturn average;\r\n}\r\n\r\nfloat smoothNoiseGradient2D(vec2 p)\r\n{\r\n\tvec2 p1 = vec2( p.x - 1.0, p.y + 1.0);\r\n\tvec2 p2 = vec2( p.x      , p.y + 1.0);\r\n\tvec2 p3 = vec2( p.x + 1.0, p.y + 1.0);\r\n\tvec2 p4 = vec2( p.x - 1.0, p.y );\r\n\tvec2 p5 = vec2( p.x      , p.y );\r\n\tvec2 p6 = vec2( p.x + 1.0, p.y );\r\n\tvec2 p7 = vec2( p.x - 1.0, p.y - 1.0);\r\n\tvec2 p8 = vec2( p.x      , p.y - 1.0);\r\n\tvec2 p9 = vec2( p.x + 1.0, p.y - 1.0);\r\n\r\n\tfloat influence1 = 0.5;\r\n\tfloat influence2 = 0.0875;\r\n\tfloat influence3 = 0.0375;\r\n\t//make sure 6*influnce1 + 20*influence2=1\r\n\r\n\tfloat n1 =  influence3 * noiseGradient2D(p1);\r\n\tfloat n2 =  influence2 * noiseGradient2D(p2);\r\n\tfloat n3 =  influence3 * noiseGradient2D(p3);\r\n\tfloat n4 =  influence2 * noiseGradient2D(p4);\r\n\tfloat n5 =  influence1 * noiseGradient2D(p5);\r\n\tfloat n6 =  influence2 * noiseGradient2D(p6);\r\n\tfloat n7 =  influence3 * noiseGradient2D(p7);\r\n\tfloat n8 =  influence2 * noiseGradient2D(p8);\r\n\tfloat n9 =  influence3 * noiseGradient2D(p9);\r\n\r\n\tfloat average = n1 + n2 +n3 + n4 + n5 + n6 +n7 + n8 + n9;\r\n\r\n\treturn average;\r\n}\r\n\r\nfloat Elevation( vec3 p )\r\n{\r\n\tfloat total = 0.0;\r\n\tfloat amplitude = 3.5;\r\n\tfloat frequency = 0.3;\r\n\tfloat peak_power = 1.13;\r\n\r\n\t//Loop over n=4 octaves\r\n\tfor(int j=0; j< 4; j++)\r\n\t{\r\n\t  \t//sum up all the octaves\r\n\t  \tvec2 pos = vec2(frequency*p.x, frequency*p.z);\r\n\t  \tpos = pos/2.0 + 0.5;\r\n\r\n\t  \ttotal += smoothNoiseSimplex2D(pos) * amplitude;\r\n\t\tfrequency *= 2.0;\r\n\t  \tamplitude *= 0.5;\r\n\t}\r\n\r\n\ttotal = abs(total);\r\n\r\n\tfloat elevation = pow(total, peak_power);\r\n\r\n\treturn elevation;\r\n}\r\n\r\nfloat Moisture( vec3 p )\r\n{\r\n\tfloat total = 0.0;\r\n\tfloat amplitude = 2.5;\r\n\tfloat frequency = 0.3;\r\n\tfloat peak_power = 1.14;\r\n\r\n\t//Loop over n=4 octaves\r\n\tfor(int j=0; j< 4; j++)\r\n\t{\r\n\t  \t//sum up all the octaves\r\n\t  \tvec2 pos = vec2(frequency*p.x, frequency*p.z);\r\n\t  \tpos = pos/2.0 + 0.5;\r\n\r\n\t  \ttotal += smoothNoiseGradient2D(pos) * amplitude;\r\n\t\tfrequency *= 2.0;\r\n\t  \tamplitude *= 0.5;\r\n\t}\r\n\r\n\ttotal = abs(total);\r\n\r\n\tfloat moisture = pow(total, peak_power);\r\n\r\n\treturn moisture;\r\n}\r\n\r\nvec3 compNormal( vec3 p )\r\n{\r\n\tfloat offset = 0.01;\r\n\tvec3 temp = p;\r\n\ttemp.x = p.x - offset;\r\n\tfloat slopeNegx = Elevation( temp );\r\n\ttemp.x = p.x + offset;\r\n\tfloat slopePosx = Elevation( temp );\r\n\r\n\ttemp = p;\r\n\ttemp.y = p.y - offset;\r\n\tfloat slopeNegy = Elevation( temp );\r\n\ttemp.y = p.y + offset;\r\n\tfloat slopePosy = Elevation( temp );\r\n\r\n\ttemp = p;\r\n\ttemp.z = p.z - offset;\r\n\tfloat slopeNegz = Elevation( temp );\r\n\ttemp.z = p.z + offset;\r\n\tfloat slopePosz = Elevation( temp );\r\n\r\n\tvec3 nor = vec3(slopePosx - slopeNegx,\r\n\t\t\t\t\tslopePosy - slopeNegy,\r\n\t\t\t\t\tslopePosz - slopeNegz);\r\n\r\n\tnor = normalize(nor);\r\n\treturn nor;\r\n}\r\n\r\nvoid main()\r\n{\r\n    f_uv = uv;\r\n    float radius = slabRadius;\r\n    f_pos = position;\r\n\r\n    f_elevation = Elevation( position + slabCenter );\r\n    f_moisture = Moisture( position + slabCenter );\r\n\r\n    vec3 center = vec3(0.0, 0.0, 0.0); //center has to be relative to the plain itself, so use origin\r\n    vec3 p = vec3( f_pos.x, 0.0, f_pos.z);\r\n\r\n    if( p.x>width && p.z>length )\r\n    {\r\n    \tradius = min(width, length);\r\n    }\r\n    else if(p.x>width)\r\n    {\r\n    \tradius = width;\r\n    }\r\n    else if(p.z>length)\r\n    {\r\n    \tradius = length;\r\n    }\r\n\r\n    float absDist = abs(distance(f_pos, center));\r\n    float relDist = absDist/radius;\r\n\tfloat scaleValue = 1.0-relDist;\r\n\r\n    if(relDist > 0.9)\r\n    {\r\n    \tscaleValue = scaleValue*0.1;\r\n    }\r\n\r\n    f_elevation = f_elevation*scaleValue;\r\n\r\n    f_pos.y = f_elevation*2.0;\r\n    f_nor = compNormal( f_pos );\r\n\r\n    viewSpace = modelViewMatrix*vec4(f_pos, 1.0);\r\n\r\n    gl_Position = projectionMatrix * viewSpace;\r\n}\r\n"
+
+/***/ }),
+/* 24 */
+/***/ (function(module, exports) {
+
+	module.exports = "varying vec2 f_uv;\r\nvarying vec3 f_nor;\r\nvarying vec3 f_pos;\r\n\r\nvarying float f_elevation;\r\nvarying float f_moisture;\r\n\r\nuniform vec3 ambientLight;\r\nuniform vec3 lightVec;\r\n\r\nuniform float fogSwitch;\r\nuniform vec3 camPos;\r\nuniform vec3 fogColor;\r\nuniform float fogDensity;\r\nuniform vec3 rimColor;\r\nvarying vec4 viewSpace;\r\n\r\nvec3 biome_Gradient(float e, float m)\r\n{\r\n\tvec3 OceanDark = vec3(35.0/255.0, 70.0/255.0, 175.0/255.0);\r\n\tvec3 OceanLight = vec3(47.0/255.0, 146.0/255.0, 252.0/255.0);\r\n\r\n\tvec3 Green = vec3(60.0/255.0, 133.0/255.0, 63.0/255.0);\r\n\tvec3 SuperLightGreen = vec3(189.0/255.0, 223.0/255.0, 190.0/255.0);\r\n\tvec3 Arid = vec3(218.0/255.0, 161.0/255.0, 87.0/255.0);\r\n\tvec3 SuperLightArid = vec3(226.0/255.0, 232.0/255.0, 247.0/255.0);\r\n\r\n\tvec3 returnColor = vec3(0.0);\r\n\r\n  \tif (e < 0.15)\r\n  \t{\r\n  \t\tfloat t = e/0.15;\r\n\t\treturnColor = (1.0-t)*OceanDark + t*OceanLight;\r\n  \t}\r\n\telse\r\n\t{\r\n\t\tvec3 colorbottom = (0.8-m)*Green + (m+0.2)*Arid;\r\n\t\tvec3 colortop = (0.9-m)*SuperLightGreen + (m+0.1)*SuperLightArid;\r\n\r\n\t\treturnColor = (1.25-e)*colorbottom + (e-0.25)*colortop;\r\n\t}\r\n\r\n  \treturn returnColor;\r\n}\r\n\r\nvoid main()\r\n{\r\n    vec3 basecolor = biome_Gradient(f_elevation, f_moisture);\r\n\r\n    vec3 finalColor_noFog = basecolor.rgb + ambientLight*basecolor.rgb;\r\n\tvec3 finalColor = basecolor + ambientLight*basecolor;\r\n\r\n\tfloat dist = length(viewSpace);\r\n\tfloat normalizedfogDensity = fogDensity/0.15;\r\n\r\n\tif( dist>75.0 )\r\n\t{\r\n\t\tfinalColor = fogColor;\r\n\t}\r\n\telse if( dist>50.0)\r\n\t{\r\n\t\tfloat t = ((dist-50.0)/25.0)*0.3 + 0.7;\r\n\t\tfinalColor = t*fogColor + (1.0-t)*finalColor;\r\n\t}\r\n\telse \r\n\t{\r\n\t\tfloat t = dist/50.0;\r\n\t\tt = t + t * normalizedfogDensity;\r\n\r\n\t\tif(t>=0.7)\r\n\t\t{\r\n\t\t\tt = 0.7;\r\n\t\t}\r\n\r\n\t\tt += (1.0-f_elevation)*0.15;\r\n\r\n\t\tfinalColor = (t-0.2)*fogColor + (1.2-t)*finalColor;\r\n\t}\r\n\r\n    finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;\r\n\r\n    gl_FragColor = vec4( finalColor, 1.0 );\r\n}\r\n"
+
+/***/ })
 /******/ ]);
 //# sourceMappingURL=bundle.js.map
