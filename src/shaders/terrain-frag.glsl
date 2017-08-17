@@ -27,17 +27,17 @@ vec3 biome_Gradient(float e, float m)
 
 	vec3 returnColor = vec3(0.0);
 
-  	if (e < 0.1)
+  	if (e < 0.15)
   	{
   		float t = e/0.15;
 		returnColor = (1.0-t)*OceanDark + t*OceanLight;
   	}
 	else
 	{
-		vec3 colorbottom = (0.7-m)*Green + (m+0.3)*Arid;
-		vec3 colortop = (0.8-m)*SuperLightGreen + (m+0.2)*SuperLightArid;
+		vec3 colorbottom = (0.8-m)*Green + (m+0.2)*Arid;
+		vec3 colortop = (0.9-m)*SuperLightGreen + (m+0.1)*SuperLightArid;
 
-		returnColor = (1.0-e)*colorbottom + e*colortop;
+		returnColor = (1.25-e)*colorbottom + (e-0.25)*colortop;
 	}
 
   	return returnColor;
@@ -47,46 +47,34 @@ void main()
 {
     vec3 basecolor = biome_Gradient(f_elevation, f_moisture);
 
-    vec3 eye_position = camPos;
-    vec3 finalColor = vec3(0.0);
-
-    vec3 light = vec3(1.0);
-
-    float absDot = clamp(dot(f_nor, normalize(light)), 0.0, 1.0);
-
-    vec3 finalColor_noFog = absDot*basecolor.rgb + ambientLight*basecolor.rgb;
-
-    //Fog Calculations
-	//get light an view directions
-	vec3 L = normalize( light );
-	vec3 V = normalize( eye_position - f_pos);
-
-	//diffuse lighting
-	vec3 diffuse = ambientLight * max(0.0, dot(L, f_nor));
-	 
-	//rim lighting
-	float rim = 1.0 - max(dot(V, f_nor), 0.0);
-	rim = smoothstep(0.6, 1.0, rim);
-	vec3 finalRim = rimColor * vec3(rim, rim, rim);
-
-	//get all lights and texture
-	vec3 f_color = finalRim + basecolor + ambientLight*basecolor;
+    vec3 finalColor_noFog = basecolor.rgb + ambientLight*basecolor.rgb;
+	vec3 finalColor = basecolor + ambientLight*basecolor;
 
 	float dist = length(viewSpace);
-	float f = exp(-fogDensity*dist*fogDensity*dist);
-	f = clamp(f, 0.0, 1.0);
+	float normalizedfogDensity = fogDensity/0.15;
 
-	finalColor = (1.0-f)*fogColor + f*f_color;
-	finalColor = absDot*finalColor;//*1.25;
-
-    if( dist>50.0 )
+	if( dist>75.0 )
 	{
 		finalColor = fogColor;
-	}	
+	}
+	else if( dist>50.0)
+	{
+		float t = ((dist-50.0)/25.0)*0.3 + 0.7;
+		finalColor = t*fogColor + (1.0-t)*finalColor;
+	}
 	else 
 	{
 		float t = dist/50.0;
-		finalColor = t*fogColor + (1.0-t)*absDot*finalColor;
+		t = t + t * normalizedfogDensity;
+
+		if(t>=0.7)
+		{
+			t = 0.7;
+		}
+
+		t += (1.0-f_elevation)*0.15;
+
+		finalColor = (t-0.2)*fogColor + (1.2-t)*finalColor;
 	}
 
     finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;

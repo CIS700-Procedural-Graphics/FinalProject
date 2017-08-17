@@ -1321,7 +1321,7 @@ function createTerrain(scene)
 				side: THREE.DoubleSide
 			} );
 
-			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 50, 50 );
+			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 150, 150 );
 			plane_geo.rotateX(0.5*Pi);
 
 			cell.mountainMaterial = mat;

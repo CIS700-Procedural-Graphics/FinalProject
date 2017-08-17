@@ -46,19 +46,19 @@ void main()
 	vec3 f_color = finalRim + texColor.rgb + ambientLight*texColor.rgb;
 
     float dist = length(viewSpace);
-    float f = exp(-fogDensity*dist*fogDensity*dist);
+    float f = exp(-fogDensity*dist*fogDensity*dist/8.0);
     f = clamp(f, 0.0, 1.0);
 
     finalColor = (1.0-f)*fogColor + f*f_color;
     finalColor = absDot*finalColor;
     
-	if( dist>50.0 )
+	if( dist>75.0 )
 	{
 		finalColor = fogColor;
 	}	
 	else
 	{
-		float t = dist/50.0;
+		float t = dist/75.0;
 		finalColor = t*fogColor + (1.0-t)*absDot*finalColor;
 	}
 
