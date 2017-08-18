@@ -219,7 +219,7 @@ function changeGUI(gui, camera, scene, renderer)
 		}
 	});
 
-	fog.add(generalParameters, 'FogDensity', 0.0001, 0.15).onChange(function(newVal) {
+	fog.add(generalParameters, 'FogDensity', 0.0000001, 0.15).onChange(function(newVal) {
 		pathMat.uniforms.fogDensity.value = newVal;
 		slabMat.uniforms.fogDensity.value = newVal;
 		for(var i=0; i<levelLayers.length; i++)
@@ -252,6 +252,11 @@ function changeGUI(gui, camera, scene, renderer)
 
 	var text = new TextActions(scene);
 	gui.add(text, 'NewLevel');
+
+	tweaks.closed = false;
+	level3DFolder.closed = false;
+	map2DFolder.closed = false;
+	fog.closed = false;
 }
 
 function setupLightsandSkybox(scene, camera, renderer)
@@ -1321,7 +1326,7 @@ function createTerrain(scene)
 				side: THREE.DoubleSide
 			} );
 
-			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 150, 150 );
+			var plane_geo = new THREE.PlaneGeometry( w*2.0,  l*2.0, 100, 100 );
 			plane_geo.rotateX(0.5*Pi);
 
 			cell.mountainMaterial = mat;

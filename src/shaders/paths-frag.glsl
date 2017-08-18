@@ -25,6 +25,8 @@ void main()
     vec3 eye_position = camPos;
     vec3 finalColor = vec3(0.0);
 
+	float _fogDensity = fogDensity/6.0; 
+
 	float absDot = clamp(dot(f_nor, normalize(lightVec)), 0.0, 1.0);	
 
 	vec3 finalColor_noFog = absDot*texColor.rgb + ambientLight*texColor.rgb;
@@ -34,11 +36,15 @@ void main()
 	vec3 L = normalize( lightVec );
 	vec3 V = normalize( eye_position - f_pos);
 
-	//diffuse lighting
-	vec3 diffuse = ambientLight * max(0.0, dot(L, f_nor));
-	 
 	//rim lighting
 	float rim = 1.0 - max(dot(V, f_nor), 0.0);
+
+	if(absDot < 0.3)
+	{
+		texColor.rgb = texColor.rgb*0.6;
+		rim = 0.4;
+	}
+
 	rim = smoothstep(0.6, 1.0, rim);
 	vec3 finalRim = rimColor * vec3(rim, rim, rim);
 
@@ -46,11 +52,10 @@ void main()
 	vec3 f_color = finalRim + texColor.rgb + ambientLight*texColor.rgb;
 
     float dist = length(viewSpace);
-    float f = exp(-fogDensity*dist*fogDensity*dist/8.0);
+    float f = exp(-_fogDensity*dist*_fogDensity*dist);
     f = clamp(f, 0.0, 1.0);
 
     finalColor = (1.0-f)*fogColor + f*f_color;
-    finalColor = absDot*finalColor;
     
 	if( dist>75.0 )
 	{
@@ -59,7 +64,7 @@ void main()
 	else
 	{
 		float t = dist/75.0;
-		finalColor = t*fogColor + (1.0-t)*absDot*finalColor;
+		finalColor = t*fogColor + (1.0-t)*finalColor;
 	}
 
     finalColor = float(fogSwitch)*finalColor + (1.0-float(fogSwitch))*finalColor_noFog;

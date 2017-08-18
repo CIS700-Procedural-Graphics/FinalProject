@@ -62,7 +62,7 @@ void main()
 		float t = ((dist-50.0)/25.0)*0.3 + 0.7;
 		finalColor = t*fogColor + (1.0-t)*finalColor;
 	}
-	else 
+	else
 	{
 		float t = dist/50.0;
 		t = t + t * normalizedfogDensity;
