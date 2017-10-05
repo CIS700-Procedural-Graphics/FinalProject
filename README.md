@@ -1,87 +1,73 @@
 # InterestingLevelGenerator
 
-Author: Aman Sachan
+[![](images/InterestingLevelGenerator_vimeoLink.png)](https://vimeo.com/227360081)
 
-The final report exists in a pdf.
-The Results folder contains images, videos and a report for the project.
+## Overview
 
-## Final Submission:
+The 'Interesting Level Generator' is a procedural multi-layer dungeon generator that generates levels based on a dynamically generated voronoi like graph after it has been heavily modified by various filters. Realistic fog, crumbling pathways, and terrain are added over the basic level layout to give it a unique mysterious foreign world aesthetic.
 
-Custom Fog Shader for every material used.
+### Original Design Goals
 
-Terrain created on the GPU with interesting gradient based shading.
+- Procedural 3D game level ( multiple stacks of 2D maps ).
+- Implicit surfaces to create terrain on the resulting map floors
+- Custom fog shader
 
-More of the Gui (Fog stuff).
+The specifications below will be implemented if I have enough time in the final week:
+- Controllable Player character
+- Collision handling so player can’t walk through geometry.
 
-Fixed bugs with intersecting paths between layers.
+## Techniques Used
+### 2D Maps Level Generation:
+#### Room Generation:
+  - Using sampling and rejection to layout the slabs in a given space.
+  - Then use a fake voronoi generation technique to create a graph. The fake voronoi technique consists of first starting with 3 connected nodes, and then for every new node you want to add to the graph you find the 2 closest neighbours from the existing graph and form edges between them.
+  - We can improve the above technique a bit more by sorting the positions of the slabs along one axis. This makes the connections look more like a voronoi pattern.
+  - This graph is highly connected so we randomly remove connections.
+  - The graph can end up with intersecting edges in a few edge cases, so we carry out 2D line intersection tests and remove any intersections if they exist.
 
-grid based acceleration structure for collisions and edge connection. (Too memory hungry for it to be useable)
+#### Walkways between slabs:
+  - Because of the graph we created above we have edge and node data, in other words we know which points to connect. So between any 2 points we could lay out corridors(planes) to connect them, but this is boring.
+  - Instead we can use instancing to place many many tiny cubes along the line segment and then randomly remove cubes to make it look like a crumbling walkway.
+  - We also need to give the walkway some width so we take the cross product of the direction of the line segment and the y axis (up) to get a horizontal ortho-normal direction for width. Add instanced cubes not just on the line segment but for a certain width for each line segment.
 
-My portion of the work: All files in the project are my work(no teammates)
+### 3D Level Generation:
+  We can create multiple 2D maps at different heights.
 
-### Brief Run down of Activities for final Submission:
+#### Interlevel Connecting Paths:
+- This is a similar problem to the one we solved in “Walkway between slabs” section; But now it’s in 3D.
+- For every layer we pick a random node/slab as the starting point of our path between layers.
+- For the end point of that line segment we search through the nodes in the layer above for rooms that are beyond a certain distance from the randomly picked starting node (so paths don’t go straight up and there is more complexity in connections), and form a list of these “toNodes”.
+- Pick a random “toNode”, and using the random starting node we have a 3D line segment.
+- Create a similar instancing cubes setup for these paths as we did with the walkways.
+- Remove random lines, and also carry out 3D intersection tests and remove any intersecting paths, if they exist.
 
--> Custom Fog Shader for every material used: e^2 fall off, with edge case handling (such as the rims/peripheral vision
-                                          and different occlusion cases based on the material)
+#### Path shifting for Paths:
+- To make the paths connecting walkways seem more organic and prevent janky looking paths that start at the center of each cell and end at the center of the other one ( this is a problem as a player can never go to a higher layer, they will be stuck underneath the “toNode” ).
+- We need to shift paths to the edges of the cells they are connecting. Simply offset by the width and length in the correct direction.
+- To add organic paths we should shift by both the width and length.
 
--> Per slab Terrain: http://www.redblobgames.com/maps/terrain-from-noise/
-                     biome and elevation based gradient mapping
-                     smoothed simplex noise used for elevation map
+#### Fog:
+- Created in the shader, with global control of density, color, and a on/off switch.
+- A good approximation of fog fall-off is: e-(fogDensity2 x distance2)
+- Fog also appears to have different densities at the periphery of our vision, so we need to account for rimColor.
+- Resource: http://in2gpu.com/2014/07/22/create-fog-shader/
 
--> More Gui: fog controls, 3D layer connectivity
+#### Terrain:
+- Terrain was created in the shader.
+- Create an elevation map and a moisture map using smoothed 2D noise with different seed values (or different noise functions).
+- Use the elevation map to deform vertices in the shader.
+- Create a moisture map ( similar to the elevation map ).
+- Use the float values from the elevation and moisture as uv values to determine colors from gradients.
 
--> Fixed bugs: the problem with intersecting paths between layers resolved.
+#### Grid based Acceleration:
+- Takes too much memory, and so was never used for anything.
 
--> grid based acceleration structure for collisions and edge connection: works but it takes too much memory so it can't be used :(
+## Future Work
+- kD tree acceleration Structure for Collision Handling
+- Character with basic character controls
+- Collision handling for the character
+- Trampolines to fill up empty and negative space
 
-### Comments:
-
-I spent a lot of time trying to voxelize different types of noise CPU side, but that doesn't work out well because of the facet that you can only make the voxels so tiny before the instance buffer of threejs can't handle it. And even at that size it doesn't look nice at all. Finally
-I ended up implementing terrain on the GPU.
-
-I need to build a kd tree instead of a grid structure for collision handling or even to figure out edge connections.
-
-## MileStone 2:
-
-3D level exists
-Working on Noise and voxelizing noise
-my portion of the work: All files in the project are my work(no teammates)
-
-### Brief Run down of Activities for milestone2:
-
--> Functional Gui: Made entire generation work on variables and randomization
--> Multiple Stacks of 2D levels
--> Grid structure for positioning information
--> Fixed weird issue from milestone1 (instanced cubes refusing to show up from certain camera angles)
-
-## MileStone 1:
-
-2D procedural level generation: done
-
-my portion of the work: All files in the project are my work(no teammates)
-
-### Brief Run down of Activities for milestone1:
-
--> Gui exists and provides  a list of all the tweakable portions of the level generator. All though I have not implemented the reset function, so for the time being you have to refresh the page to see a new map.
--> Created a bunch of slabs and placed them in a plane at random positions; Using a sample and rejection technique to prevent overlapping slabs/rooms.
-
--> Created a fake voronoi graph using the slab centers as points; Credits: Trung
-
--> This fake voronoi starts of as a triangle and starts assimilating points into the graph based on their procimity to the established graph. This creates a highly interconnected graph that is very natural looking and has a feel of complexity but doesn't connect every point to every other point or the exact opposite, i.e a MST minimal spanning tree.
-
--> I then remove edges in the graph that intersect other edges.
-
--> Next I remove edges at random while maintaining atleast one connection on every graph point
-
--> along the line segments joining the slabs I voxelized the space and generated a bunch of cubes to represent the path;
-Using randomness and some adjustable threshold I can remove cubes giving the path a worn away feel;
-
--> The cubes were created using the instanced BufferGeometry of three.js for speed and efficiency
-
-### Weird Issues:
-
-The Instanced cubes that were created occassionally refuse to show up when viewing the scene from certain camera angles.
-
-### Comments:
-
-I spent some time experimenting with various graphs and room placement techniques before settling down on the methods I am currently using. These methods proved to be faster and easier to implement than what I had initially mentioned in my design Doc.
+## Resources
+- Terrain: http://www.redblobgames.com/maps/terrain-from-noise/
+- Fog: http://in2gpu.com/2014/07/22/create-fog-shader/
